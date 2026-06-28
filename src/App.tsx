@@ -13,7 +13,7 @@ import { seedWithSampleNarrations } from './utils/seedData';
 
 function App() {
   const { loadScripts, setActiveScript, scripts, isLoading } = useScriptStore();
-  const { addToast, mainFontSize, mainLineHeight, setSidebarOpen } = useUIStore();
+  const { addToast, mainFontSize, mainLineHeight, setSidebarOpen, sidebarOpen } = useUIStore();
 
   // Apply typography settings to CSS custom properties
   useEffect(() => {
@@ -106,8 +106,9 @@ function App() {
       <YTDescriptionModal />
       <ToastContainer />
 
-      {/* Welcome / empty state — only when there are no scripts yet */}
-      {scripts.length === 0 && (
+      {/* Welcome / empty state — only when there are no scripts yet and the
+          script panel is closed. Reopens once the panel is closed again. */}
+      {scripts.length === 0 && !sidebarOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center px-6 pointer-events-none">
           <div className="pointer-events-auto w-full max-w-[440px] text-center text-white">
             <h1 className="text-2xl font-semibold mb-3" style={{ fontFamily: 'var(--font-headline)' }}>
@@ -128,7 +129,7 @@ function App() {
             <div className="flex flex-col items-center gap-3">
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="w-full max-w-[280px] px-4 py-2.5 bg-[var(--color-accent)] hover:bg-[#e89a3f] text-white rounded-lg shadow-lg font-medium text-sm"
+                className="w-full max-w-[280px] px-4 py-2.5 bg-[var(--color-accent)] hover:bg-[#e89a3f] text-[#1a1a1a] rounded-lg shadow-lg font-medium text-sm"
               >
                 Open script panel
               </button>

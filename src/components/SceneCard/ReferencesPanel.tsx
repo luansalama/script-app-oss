@@ -124,7 +124,7 @@ export function ReferencesPanel({
               <div className="flex gap-2 mt-2">
                 <button
                   onClick={handleAdd}
-                  className="flex-1 px-2 py-1 text-xs bg-[var(--color-accent)] hover:bg-[#e89a3f] rounded text-white"
+                  className="flex-1 px-2 py-1 text-xs bg-[var(--color-accent)] hover:bg-[#e89a3f] rounded text-[#1a1a1a]"
                 >
                   Add
                 </button>

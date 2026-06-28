@@ -94,6 +94,7 @@ export function Storyboard() {
   } = useUIStore();
 
   const script = getActiveScript();
+  const scripts = useScriptStore(state => state.scripts);
 
   // ── Script-switch animation ──
   // 1. Drawer closes + LeftBar title/duration fades out (both driven by pendingScriptSwitch)
@@ -410,6 +411,13 @@ export function Storyboard() {
   };
 
   if (!script) {
+    // When there are no scripts at all, App renders the welcome overlay on its
+    // black background. Render nothing here so the white main-content surface
+    // doesn't cover that overlay (its text is white and would be invisible).
+    if (scripts.length === 0) {
+      return null;
+    }
+
     return (
       <div
         className={`main-content ${sidebarOpen ? 'sidebar-open' : ''} flex items-center justify-center`}
