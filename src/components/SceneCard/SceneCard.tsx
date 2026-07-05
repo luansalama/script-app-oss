@@ -1548,7 +1548,8 @@ export function SceneCard({
               className="subheading scene-duration-input"
               style={{
                 width: 36,
-                ...(isLocked ? { color: 'var(--color-card-text)' } : {}),
+                color: 'var(--color-card-text)',
+                opacity: 1,
                 ...(durationBounce ? { animation: 'duration-bounce 0.3s ease' } : {}),
               }}
             />
