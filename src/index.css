@@ -411,6 +411,9 @@ button {
 }
 
 .scene-column.is-locked .onscreen-bullet:not(.is-checked) {
+  outline-color: rgba(0, 0, 0, 0.4);
+}
+.dark-mode .scene-column.is-locked .onscreen-bullet:not(.is-checked) {
   outline-color: rgba(255, 255, 255, 0.4);
 }
 
