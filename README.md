@@ -13,10 +13,9 @@ This fork builds on [halfof8/script-app-oss](https://github.com/halfof8/script-a
 - **Toast System** — Animated slide-out notifications
 - **Film Grain Overlay** — Perlin noise via offscreen canvas at ~24fps
 - **Modal Dark Mode + Polish** — All modals themed, Escape key support, `useLayoutEffect` portal positioning
+- **Plus other minor tweaks and polish.
 
 Built with [opencode](https://opencode.ai) using a small local model to assist the development process.
-
-- Plus other minor tweaks and polish.
 
 ---
 
