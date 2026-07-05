@@ -742,13 +742,16 @@ button {
   filter: brightness(0);
 }
 
-/* Locked reference pills: F74227/10% bg, accent text.
+/* Locked reference pills: darker gray in light mode, orange-tint in dark mode.
    Curtain effect: ::before sweeps left→right over 0.4s on lock, right→left on unlock.
    On lock: change style instantly (under the incoming dark sweep, never seen).
    On unlock: change style instantly (under the retreating sweep, already correct when revealed). */
 .scene-column.is-locked .reference-pill {
-  background: rgba(255, 170, 73, 0.1);
+  background: #e0e0e0;
   color: var(--color-accent);
+}
+.dark-mode .scene-column.is-locked .reference-pill {
+  background: rgba(255, 170, 73, 0.1);
 }
 
 .scene-column.is-locked .reference-pill-placeholder {
