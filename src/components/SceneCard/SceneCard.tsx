@@ -913,38 +913,37 @@ export function SceneCard({
   // Increasing (insert): old slides down, new slides in from above.
   // Decreasing (delete): old slides up, new slides in from below.
   // Staggered: closest column to the change point animates first.
-  const sceneNumber = (index + 1).toString();
-  const prevNumberRef = useRef(sceneNumber);
+  //
+  // Uses [displayNumber, index] as deps so that intermediate re-renders (e.g.
+  // dnd-kit flushSync after drag) don't cancel the animation timeout before it
+  // fires. Once the timeout updates displayNumber, the effect sees a match and
+  // stops. If index changes again mid-animation, the old timeout is cancelled
+  // and a fresh one starts — self-correcting.
   const prevIndexRef = useRef(index);
-  const [displayNumber, setDisplayNumber] = useState(sceneNumber);
+  const [displayNumber, setDisplayNumber] = useState((index + 1).toString());
   const [numberAnim, setNumberAnim] = useState<'idle' | 'out' | 'in'>('idle');
   const [numberDirection, setNumberDirection] = useState<'up' | 'down'>('up');
 
   useEffect(() => {
-    if (sceneNumber !== prevNumberRef.current) {
-      const oldNum = parseInt(prevNumberRef.current, 10);
-      const newNum = parseInt(sceneNumber, 10);
-      const dir = newNum > oldNum ? 'up' : 'down';
-      prevNumberRef.current = sceneNumber;
-
-      // Stagger: columns further from the change point wait longer.
-      // For insertion the change point is at prevIndex; for deletion at index.
-      const staggerMs = Math.abs(index - prevIndexRef.current) * 50;
+    const newNum = (index + 1).toString();
+    if (newNum === displayNumber) {
       prevIndexRef.current = index;
-
-      const delay = setTimeout(() => {
-        setNumberDirection(dir);
-        setNumberAnim('out');
-        setTimeout(() => {
-          setDisplayNumber(sceneNumber);
-          setNumberAnim('in');
-          setTimeout(() => setNumberAnim('idle'), 250);
-        }, 200);
-      }, 400 + staggerMs);
-      return () => clearTimeout(delay);
+      return;
     }
+
+    const dir = parseInt(newNum, 10) > parseInt(displayNumber, 10) ? 'up' : 'down';
+    const staggerMs = Math.abs(index - prevIndexRef.current) * 50;
     prevIndexRef.current = index;
-  }, [sceneNumber, index]);
+
+    setNumberDirection(dir);
+    const t1 = setTimeout(() => setNumberAnim('out'), 400 + staggerMs);
+    const t2 = setTimeout(() => {
+      setDisplayNumber(newNum);
+      setNumberAnim('in');
+    }, 600 + staggerMs);
+    const t3 = setTimeout(() => setNumberAnim('idle'), 850 + staggerMs);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+  }, [displayNumber, index]);
 
   // Empty checks for locked hide
   const hasNarration = !!localNarration.trim();
