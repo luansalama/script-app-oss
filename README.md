@@ -16,6 +16,8 @@ This fork builds on [halfof8/script-app-oss](https://github.com/halfof8/script-a
 
 Built with [opencode](https://opencode.ai) using a small local model to assist the development process.
 
+- Plus other minor tweaks and polish.
+
 ---
 
 # SceneScript
