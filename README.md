@@ -2,6 +2,8 @@
 
 This fork builds on [halfof8/script-app-oss](https://github.com/halfof8/script-app-oss) with significant UI/UX enhancements:
 
+![Light/Dark Mode Comparison](lightdark_comparison.png)
+
 - **Full Dark Mode** — CSS variable theming with localStorage persistence, flash prevention, and smooth transitions throughout
 - **Animated SVG Icon System** — Path-morphing icons (delete, drag, generate, etc.) with hover/active states
 - **Undo System (Ctrl+Z)** — Global undo stack supporting scene CRUD, reorder, edits, and script changes
