@@ -21,6 +21,7 @@ import { useScriptStore } from '../stores/scriptStore';
 import { useUIStore } from '../stores/uiStore';
 import { withComputed } from '../utils/sceneHelpers';
 import { generateNarration } from '../services/generation';
+import { pushUndo, popUndo } from '../utils/undoHistory';
 import type { Scene } from '../types';
 
 const COL_W = 324;
@@ -61,14 +62,10 @@ export function Storyboard() {
     addScene,
     updateScene,
     reorderScenes,
-    updateDraftContent,
-    setCurrentDraftVersion,
-    deleteDraftVersion,
     updateNarration,
     toggleFixed,
     toggleOnScreenText,
     updateOnScreenTextsFromText,
-    updateReferencesFromText,
     addReference,
     updateReference,
     deleteReference,
@@ -91,6 +88,7 @@ export function Storyboard() {
     aboutAnimPhase,
     addToast,
     timelinePreviewActive,
+    versionBrowsingSceneIds,
   } = useUIStore();
 
   const script = getActiveScript();
@@ -114,11 +112,17 @@ export function Storyboard() {
     return () => clearTimeout(timer);
   }, [pendingScriptSwitch, setActiveScript, setPendingScriptSwitch]);
 
-  // Close sidebar on Esc
+  // Close sidebar on Esc; Ctrl+Z global undo
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === 'Escape' && sidebarOpen) {
         setSidebarOpen(false);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        const entry = popUndo();
+        if (entry) entry.undo();
       }
     },
     [sidebarOpen, setSidebarOpen]
@@ -177,6 +181,25 @@ export function Storyboard() {
     }
   }, [isReadingMode]);
 
+  // Arrow keys scroll between scenes in reading mode
+  useEffect(() => {
+    if (!isReadingMode) return;
+    const handleArrowKeys = (e: KeyboardEvent) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      if (scrollingRef.current) return;
+      const dir = e.key === 'ArrowRight' ? 1 : -1;
+      const nextIdx = Math.max(0, Math.min(orderedScenes.length - 1, snappedIndex + dir));
+      if (nextIdx === snappedIndex) return;
+      flushSync(() => setSnappedIndex(nextIdx));
+      scrollingRef.current = true;
+      mainContentRef.current?.scrollTo({ left: nextIdx * COL_W, behavior: 'smooth' });
+      setTimeout(() => { scrollingRef.current = false; }, 800);
+    };
+    document.addEventListener('keydown', handleArrowKeys);
+    return () => document.removeEventListener('keydown', handleArrowKeys);
+  }, [isReadingMode, orderedScenes.length, snappedIndex, setSnappedIndex]);
+
   // Reading mode: programmatic segmented scrolling.
   // Intercept wheel events and scroll exactly one column per gesture.
   const scrollingRef = useRef(false);
@@ -213,6 +236,28 @@ export function Storyboard() {
     scrollEl.addEventListener('wheel', handleWheel, { passive: false });
     return () => scrollEl.removeEventListener('wheel', handleWheel);
   }, [isReadingMode, snappedIndex, orderedScenes.length]);
+
+  // Convert vertical scroll to horizontal scroll in normal mode
+  useEffect(() => {
+    if (isReadingMode || !mainContentRef.current) return;
+    const scrollEl = mainContentRef.current;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (e.shiftKey) {
+        e.preventDefault();
+        window.scrollBy({ top: e.deltaY });
+        return;
+      }
+      // Only convert vertical scroll to horizontal
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && Math.abs(e.deltaY) > 2) {
+        e.preventDefault();
+        scrollEl.scrollBy({ left: e.deltaY });
+      }
+    };
+
+    scrollEl.addEventListener('wheel', handleWheel, { passive: false });
+    return () => scrollEl.removeEventListener('wheel', handleWheel);
+  }, [isReadingMode]);
 
   // ── Drop landing: FLIP animation ──
   // Ref map for SceneCard DOM elements
@@ -282,10 +327,12 @@ export function Storyboard() {
       const columnWidth = COL_W;
       const dx = lastTransform.x - (newIndex - oldIndex) * columnWidth;
 
-      const newOrder = [...script.sceneOrder];
+      const oldOrder = [...script.sceneOrder];
+      const newOrder = [...oldOrder];
       newOrder.splice(oldIndex, 1);
       newOrder.splice(newIndex, 0, targetId);
       reorderScenes(script.id, newOrder);
+      pushUndo({ label: `Reorder scenes`, undo: () => reorderScenes(script.id, oldOrder) });
 
       animateColumnLanding(targetId, dx, lastTransform.y);
     }
@@ -293,7 +340,11 @@ export function Storyboard() {
 
   const handleAddScene = async () => {
     if (!script) return;
-    await addScene(script.id);
+    const preId = crypto.randomUUID();
+    setRevealingSceneId(preId);
+    await addScene(script.id, undefined, preId);
+    pushUndo({ label: `Add scene`, undo: () => { deleteScene(preId); } });
+    setTimeout(() => setRevealingSceneId(null), 1100);
   };
 
   const [revealingSceneId, setRevealingSceneId] = useState<string | null>(null);
@@ -331,8 +382,9 @@ export function Storyboard() {
     const preId = crypto.randomUUID();
     setRevealingSceneId(preId);
     await addScene(script.id, afterSceneId, preId);
+    pushUndo({ label: `Insert scene`, undo: () => { deleteScene(preId); } });
     setTimeout(() => setRevealingSceneId(null), 1100);
-  }, [script, addScene]);
+  }, [script, addScene, deleteScene]);
 
   const handleDeleteScene = useCallback((sceneId: string) => {
     if (deletingSceneId) return;
@@ -342,25 +394,40 @@ export function Storyboard() {
     const idx = sceneOrder.indexOf(sceneId);
     const afterId = idx > 0 ? sceneOrder[idx - 1] : undefined;
     const stashed = scene ? structuredClone(scene) : null;
+    if (stashed) {
+      const restoreWithAnimation = () => {
+        const preId = crypto.randomUUID();
+        setRevealingSceneId(preId);
+        restoreScene(stashed, afterId, preId);
+        setTimeout(() => setRevealingSceneId(null), 1100);
+      };
+      pushUndo({ label: `Delete "${stashed.title}"`, undo: restoreWithAnimation });
 
-    setDeletingSceneId(sceneId);
-    setTimeout(() => {
-      deleteScene(sceneId);
-      setDeletingSceneId(null);
+      setDeletingSceneId(sceneId);
+      setTimeout(() => {
+        deleteScene(sceneId);
+        setDeletingSceneId(null);
+      }, 1000); // Wait for delete animation (reveal 0.55s + collapse 0.4s)
 
-      if (stashed) {
+      setTimeout(() => {
         addToast({
           type: 'info',
           message: `Deleted "${stashed.title}"`,
-          duration: 8000,
+          duration: 6000,
           action: {
             label: 'Undo',
-            onClick: () => restoreScene(stashed, afterId),
+            onClick: restoreWithAnimation,
           },
         });
-      }
-    }, 750);
-  }, [deletingSceneId, deleteScene, scenes, script, addToast, restoreScene]);
+      }, 1250); // Toast appears shortly after card is removed
+    } else {
+      setDeletingSceneId(sceneId);
+      setTimeout(() => {
+        deleteScene(sceneId);
+        setDeletingSceneId(null);
+      }, 1000);
+    }
+  }, [deletingSceneId, deleteScene, scenes, script, addToast, restoreScene, setRevealingSceneId]);
 
   const handleNarrationEdit = useCallback((sceneId: string, narration: string) => {
     const scene = scenes.find(s => s.id === sceneId);
@@ -389,7 +456,11 @@ export function Storyboard() {
       const result = await generateNarration(scene, script, scenes);
 
       if (result.success && result.narration) {
+        const oldNarration = scene.narration;
+        const oldVersions = structuredClone(scene.narrationVersions);
+        const oldIdx = scene.currentNarrationVersionIndex;
         updateNarration(sceneId, result.narration, scene.currentDraftIndex);
+        pushUndo({ label: `Generate narration`, undo: () => updateScene(sceneId, { narration: oldNarration, narrationVersions: oldVersions, currentNarrationVersionIndex: oldIdx }) });
         addToast({
           type: 'success',
           message: `Generated narration for "${scene.title}"`,
@@ -446,6 +517,7 @@ export function Storyboard() {
     <div
       ref={mainContentRef}
       className={`main-content ${sidebarOpen ? 'sidebar-open' : ''} ${sidebarClosing ? 'sidebar-closing' : ''} ${isReadingMode ? 'reading-mode' : ''}`}
+      style={{ overflowX: versionBrowsingSceneIds.length > 0 ? 'clip' : undefined }}
       onClick={handleSceneAreaClick}
     >
       <DndContext
@@ -541,45 +613,70 @@ export function Storyboard() {
                 reportDragTransform={reportDragTransform}
                 isReadingMode={isReadingMode}
                 isSnapped={isReadingMode && index === snappedIndex}
-                onUpdateTitle={title => updateScene(scene.id, { title })}
-                onUpdateDuration={durationSec =>
-                  updateScene(scene.id, { durationSec })
-                }
-                onUpdateDraftContent={content =>
-                  updateDraftContent(scene.id, content)
-                }
-                onSelectDraftVersion={idx =>
-                  setCurrentDraftVersion(scene.id, idx)
-                }
-                onDeleteDraft={idx =>
-                  deleteDraftVersion(scene.id, idx)
-                }
-                onUpdateNarration={narration =>
-                  handleNarrationEdit(scene.id, narration)
-                }
-                onCreateNarrationVersion={() =>
-                  createNarrationVersion(scene.id)
-                }
-                onSetNarrationVersion={idx =>
-                  setNarrationVersion(scene.id, idx)
-                }
-                onDeleteNarrationVersion={idx =>
-                  deleteNarrationVersion(scene.id, idx)
-                }
-                onToggleFixed={() => toggleFixed(scene.id)}
+                onUpdateTitle={title => {
+                  const old = scene.title;
+                  updateScene(scene.id, { title });
+                  pushUndo({ label: `Rename to "${title}"`, undo: () => updateScene(scene.id, { title: old }) });
+                }}
+                onUpdateDuration={durationSec => {
+                  const old = scene.durationSec;
+                  updateScene(scene.id, { durationSec });
+                  pushUndo({ label: `Change duration`, undo: () => updateScene(scene.id, { durationSec: old }) });
+                }}
+                onUpdateNarration={narration => {
+                  const oldNarration = scene.narration;
+                  const oldVersions = structuredClone(scene.narrationVersions);
+                  handleNarrationEdit(scene.id, narration);
+                  pushUndo({ label: `Edit narration`, undo: () => updateScene(scene.id, { narration: oldNarration, narrationVersions: oldVersions }) });
+                }}
+                onCreateNarrationVersion={() => {
+                  const oldVersions = structuredClone(scene.narrationVersions);
+                  const oldIdx = scene.currentNarrationVersionIndex;
+                  createNarrationVersion(scene.id);
+                  pushUndo({ label: `Create narration version`, undo: () => updateScene(scene.id, { narrationVersions: oldVersions, currentNarrationVersionIndex: oldIdx }) });
+                }}
+                onSetNarrationVersion={idx => {
+                  const oldIdx = scene.currentNarrationVersionIndex;
+                  const oldNarration = scene.narration;
+                  setNarrationVersion(scene.id, idx);
+                  pushUndo({ label: `Select narration v${idx + 1}`, undo: () => {
+                    setNarrationVersion(scene.id, oldIdx);
+                    updateScene(scene.id, { narration: oldNarration });
+                  }});
+                }}
+                onDeleteNarrationVersion={versionIdx => {
+                  const oldVersions = structuredClone(scene.narrationVersions);
+                  const oldIdx = scene.currentNarrationVersionIndex;
+                  deleteNarrationVersion(scene.id, versionIdx);
+                  pushUndo({ label: `Delete narration v${versionIdx + 1}`, undo: () => updateScene(scene.id, { narrationVersions: oldVersions, currentNarrationVersionIndex: oldIdx }) });
+                }}
+                onToggleFixed={() => {
+                  const was = scene.isFixed;
+                  toggleFixed(scene.id);
+                  pushUndo({ label: was ? 'Unlock scene' : 'Lock scene', undo: () => toggleFixed(scene.id) });
+                }}
                 onGenerate={() => handleGenerateScene(scene.id)}
-                onToggleOnScreenText={textId =>
-                  toggleOnScreenText(scene.id, textId)
-                }
-                onUpdateOnScreenTextsText={text =>
-                  updateOnScreenTextsFromText(scene.id, text)
-                }
-                onUpdateReferencesText={text =>
-                  updateReferencesFromText(scene.id, text)
-                }
-                onAddReference={(ref) => addReference(scene.id, { ...ref, note: '' })}
+                onToggleOnScreenText={textId => {
+                  const oldOnScreenTexts = structuredClone(scene.onScreenTexts);
+                  toggleOnScreenText(scene.id, textId);
+                  pushUndo({ label: `Toggle on-screen text`, undo: () => updateScene(scene.id, { onScreenTexts: oldOnScreenTexts }) });
+                }}
+                onUpdateOnScreenTextsText={text => {
+                  const old = structuredClone(scene.onScreenTexts);
+                  updateOnScreenTextsFromText(scene.id, text);
+                  pushUndo({ label: `Edit on-screen texts`, undo: () => updateScene(scene.id, { onScreenTexts: old }) });
+                }}
+                onAddReference={(ref) => {
+                  const old = structuredClone(scene.references);
+                  addReference(scene.id, { ...ref, note: '' });
+                  pushUndo({ label: `Add reference`, undo: () => updateScene(scene.id, { references: old }) });
+                }}
                 onUpdateReference={(refId, updates) => updateReference(scene.id, refId, updates)}
-                onDeleteReference={(refId) => deleteReference(scene.id, refId)}
+                onDeleteReference={(refId) => {
+                  const old = structuredClone(scene.references);
+                  deleteReference(scene.id, refId);
+                  pushUndo({ label: `Delete reference`, undo: () => updateScene(scene.id, { references: old }) });
+                }}
                 onDeleteScene={() => handleDeleteScene(scene.id)}
                 isRevealing={revealingSceneId === scene.id}
                 externalHovered={externalHoverId === scene.id}
@@ -640,7 +737,7 @@ export function Storyboard() {
               <div style={{ width: COL_W }} className="flex-shrink-0 px-[40px] pt-[20px] pb-[20px] h-full flex flex-col">
                 <button
                   onClick={handleAddScene}
-                  className="mt-[60px] h-[50px] flex items-center text-[var(--color-black)] hover:text-[var(--color-accent)] transition-colors"
+                  className="add-scene-btn mt-[60px] h-[50px] flex items-center text-[var(--color-black)] hover:text-[var(--color-accent)] transition-colors"
                   title="Add scene"
                 >
                   <NewSceneIcon size={50} />

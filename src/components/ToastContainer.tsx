@@ -3,7 +3,12 @@ import { useUIStore } from '../stores/uiStore';
 import type { Toast } from '../stores/uiStore';
 
 export function ToastContainer() {
-  const { toasts, removeToast } = useUIStore();
+  const { toasts, removeToast, cleanupToast } = useUIStore();
+
+  const handleDismiss = (id: string) => {
+    removeToast(id);
+    setTimeout(() => cleanupToast(id), 300);
+  };
 
   if (toasts.length === 0) return null;
 
@@ -16,7 +21,7 @@ export function ToastContainer() {
       {regularToasts.length > 0 && (
         <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
           {regularToasts.map(toast => (
-            <ToastItem key={toast.id} toast={toast} onDismiss={removeToast} />
+            <ToastItem key={toast.id} toast={toast} onDismiss={handleDismiss} />
           ))}
         </div>
       )}
@@ -28,18 +33,23 @@ export function ToastContainer() {
             <div
               key={toast.id}
               className="flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border bg-[var(--color-black)] text-white"
-              style={{ minWidth: 240, animation: 'toast-slide-up 0.3s ease both' }}
+              style={{
+                minWidth: 240,
+                animation: toast.closing
+                  ? 'toast-slide-down 0.3s ease both'
+                  : 'toast-slide-up 0.3s ease both',
+              }}
             >
               <p className="flex-1 text-sm">{toast.message}</p>
               <button
-                onClick={() => { toast.action!.onClick(); removeToast(toast.id); }}
+                onClick={() => { toast.action!.onClick(); handleDismiss(toast.id); }}
                 className="text-sm font-semibold px-3 py-1 rounded-md"
                 style={{ background: 'var(--color-accent)', color: 'white' }}
               >
                 {toast.action!.label}
               </button>
               <button
-                onClick={() => removeToast(toast.id)}
+                onClick={() => handleDismiss(toast.id)}
                 className="text-white/40 hover:text-white/70 ml-1"
               >
                 <X size={14} />
@@ -56,6 +66,11 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string)
   return (
     <div
       className={`flex items-start gap-3 min-w-[300px] max-w-md px-4 py-3 rounded-lg shadow-lg border ${getToastStyles(toast.type)}`}
+      style={{
+        animation: toast.closing
+          ? 'toast-slide-down 0.3s ease both'
+          : 'toast-slide-up 0.3s ease both',
+      }}
     >
       <div className="flex-shrink-0 mt-0.5">
         {getToastIcon(toast.type)}

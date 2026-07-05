@@ -1,16 +1,13 @@
-import { v4 as uuidv4 } from 'uuid';
 import type { Script, Scene } from '../types';
 import * as db from '../services/db';
 
 export async function seedOnboardingScript(): Promise<{ script: Script; scenes: Scene[] }> {
-  const scriptId = uuidv4();
+  const scriptId = crypto.randomUUID();
   const now = Date.now();
 
   const script: Script = {
     id: scriptId,
     name: 'Getting Started with SceneScript',
-    titleJP: '',
-    emoji: '',
     paceWordsPerSec: 2.5,
     voiceProfile: 'Friendly, clear, and encouraging. Like a calm product tour that explains one idea at a time without jargon.',
     sceneOrder: [],
@@ -160,7 +157,7 @@ export async function seedOnboardingScript(): Promise<{ script: Script; scenes: 
   ];
 
   const scenes: Scene[] = scenesData.map((data, index) => {
-    const sceneId = uuidv4();
+    const sceneId = crypto.randomUUID();
     script.sceneOrder.push(sceneId);
 
     return {
@@ -184,12 +181,12 @@ export async function seedOnboardingScript(): Promise<{ script: Script; scenes: 
       narrationVersions: [],
       currentNarrationVersionIndex: -1,
       onScreenTexts: data.onScreenTexts.map(text => ({
-        id: uuidv4(),
+        id: crypto.randomUUID(),
         text,
         isChecked: false,
       })),
       references: data.references.map(ref => ({
-        id: uuidv4(),
+        id: crypto.randomUUID(),
         ...ref,
       })),
     };

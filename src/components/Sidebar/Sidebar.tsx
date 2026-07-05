@@ -18,6 +18,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { DeleteIcon, DragIcon, EditIcon, NewSceneIcon, Config50Icon } from '../Icons';
 import { useScriptStore } from '../../stores/scriptStore';
 import { useUIStore } from '../../stores/uiStore';
+import { pushUndo } from '../../utils/undoHistory';
 import type { Script, ScriptStatus } from '../../types';
 
 const STATUS_ORDER: ScriptStatus[] = ['backlog', 'in-progress', 'done'];
@@ -37,10 +38,9 @@ function ScriptSettingsModal({
   mode: 'create' | 'edit';
   script?: Script;
   onClose: () => void;
-  onSave: (name: string, titleJP: string) => void;
+  onSave: (name: string) => void;
 }) {
   const [name, setName] = useState(script?.name ?? '');
-  const [titleJP, setTitleJP] = useState(script?.titleJP ?? '');
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -57,7 +57,7 @@ function ScriptSettingsModal({
   }, [onClose]);
 
   const handleSubmit = () => {
-    if (name.trim()) onSave(name.trim(), titleJP.trim());
+    if (name.trim()) onSave(name.trim());
   };
 
   const isDisabled = !name.trim();
@@ -75,19 +75,19 @@ function ScriptSettingsModal({
           left: 235, top: '50%',
           width: 314,
           borderRadius: 16,
-          border: '0.5px solid #E6E6E6',
-          background: 'white',
+          border: '0.5px solid var(--color-border)',
+          background: 'var(--color-card-bg)',
           padding: 16,
           display: 'flex',
           flexDirection: 'column',
           gap: 16,
-          boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
+          boxShadow: 'var(--color-shadow, 0 4px 24px rgba(0,0,0,0.08))',
           animation: 'ref-dialog-in 0.25s cubic-bezier(0.2, 0, 0, 1) both',
         }}
         onClick={e => e.stopPropagation()}
       >
           <div style={{ height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontFamily: 'var(--font-headline)', fontSize: 18, textTransform: 'uppercase' }}>
+            <span style={{ fontFamily: 'var(--font-headline)', fontSize: 18, textTransform: 'uppercase', color: 'var(--color-text)' }}>
               {mode === 'create' ? 'New Script' : 'Edit Script'}
             </span>
           </div>
@@ -100,22 +100,10 @@ function ScriptSettingsModal({
             onKeyDown={e => { if (e.key === 'Enter') handleSubmit(); }}
             placeholder="English title"
             style={{
-              height: 40, borderRadius: 8, border: '0.5px solid #E6E6E6',
+              height: 40, borderRadius: 8, border: '0.5px solid var(--color-border)',
               paddingLeft: 10, fontSize: 13, outline: 'none', flexShrink: 0,
               margin: 0, background: 'transparent', fontWeight: 500,
-            }}
-          />
-
-          <input
-            type="text"
-            value={titleJP}
-            onChange={e => setTitleJP(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleSubmit(); }}
-            placeholder="日本語タイトル"
-            style={{
-              height: 40, borderRadius: 8, border: '0.5px solid #E6E6E6',
-              paddingLeft: 10, fontSize: 13, outline: 'none', flexShrink: 0,
-              margin: 0, background: 'transparent', fontWeight: 500,
+              color: 'var(--color-text)',
             }}
           />
 
@@ -124,8 +112,8 @@ function ScriptSettingsModal({
               onClick={onClose}
               style={{
                 flex: 1, height: 40, borderRadius: 8,
-                border: '0.5px solid #E6E6E6', background: 'transparent',
-                cursor: 'pointer', fontSize: 13, fontWeight: 500, color: '#7C7C7C',
+                border: '0.5px solid var(--color-border)', background: 'transparent',
+                cursor: 'pointer', fontSize: 13, fontWeight: 500, color: 'var(--color-text)',
               }}
             >
               Cancel
@@ -135,7 +123,7 @@ function ScriptSettingsModal({
               disabled={isDisabled}
               style={{
                 flex: 1, height: 40, borderRadius: 8,
-                background: isDisabled ? '#E6E6E6' : 'var(--color-accent)',
+                background: isDisabled ? 'var(--color-border)' : 'var(--color-accent)',
                 color: 'white',
                 border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500,
               }}
@@ -351,16 +339,17 @@ export function Sidebar() {
     setPendingScriptSwitch(id);
   };
 
-  const handleModalSave = async (name: string, titleJP: string) => {
+  const handleModalSave = async (name: string) => {
     if (modalTarget === 'create') {
       const script = await createScript(name);
-      await updateScript(script.id, { titleJP });
       setModalTarget(null);
       await setActiveScript(script.id);
       setSidebarOpen(false);
       addToast({ type: 'success', message: `Created "${name}"` });
     } else if (modalTarget && typeof modalTarget === 'object') {
-      await updateScript(modalTarget.id, { name, titleJP });
+      const oldName = modalTarget.name;
+      await updateScript(modalTarget.id, { name });
+      pushUndo({ label: `Rename script`, undo: () => updateScript(modalTarget.id, { name: oldName }) });
       setModalTarget(null);
     }
   };
@@ -395,7 +384,9 @@ export function Sidebar() {
     if (!script) return;
     const currentStatus: ScriptStatus = script.status ?? 'backlog';
     if (currentStatus !== targetStatus) {
+      const oldStatus = currentStatus;
       await updateScript(scriptId, { status: targetStatus });
+      pushUndo({ label: `Move script to ${targetStatus}`, undo: () => updateScript(scriptId, { status: oldStatus }) });
     }
   };
 

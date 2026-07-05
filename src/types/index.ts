@@ -5,8 +5,6 @@ export type ScriptStatus = 'backlog' | 'in-progress' | 'done';
 export interface Script {
   id: string;
   name: string;
-  titleJP: string; // Japanese version of the title (vertical in sidebar)
-  emoji: string; // displayed before script name in sidebar
   paceWordsPerSec: number; // e.g., 2.5 words per second
   voiceProfile: string; // tone guide for LLM
   sceneOrder: string[]; // scene IDs in display order
@@ -86,20 +84,6 @@ export interface SceneWithComputed extends Scene {
   computed: SceneComputed;
 }
 
-// === Generation Types ===
-
-export type GenerationMode =
-  | { type: 'all-unlocked' }
-  | { type: 'missing-or-outdated' }
-  | { type: 'from-scene'; sceneId: string; onlyOutdated: boolean };
-
-export interface GenerationTarget {
-  target: number;
-  min: number;
-  max: number;
-  tolerance: number;
-}
-
 export interface GenerationResult {
   sceneId: string;
   success: boolean;
@@ -108,29 +92,4 @@ export interface GenerationResult {
   error?: string;
 }
 
-// === UI State Types ===
 
-export interface UIState {
-  sidebarOpen: boolean;
-  activeScriptId: string | null;
-  selectedSceneId: string | null;
-  isGenerating: boolean;
-  generatingSceneIds: string[];
-  apiKeyModalOpen: boolean;
-}
-
-// === Undo/Redo Types ===
-
-export interface UndoableAction {
-  type: string;
-  timestamp: number;
-  payload: unknown;
-  undo: () => void;
-  redo: () => void;
-}
-
-// === API Key Types ===
-
-export interface APIKeyConfig {
-  openaiKey: string | null;
-}

@@ -107,45 +107,4 @@ export function calculateTotalRuntime(
   }, 0);
 }
 
-/**
- * Generate YouTube description from references
- */
-export function generateYouTubeDescription(
-  scenes: Scene[],
-  sceneOrder: string[],
-  scriptName: string
-): string {
-  const lines: string[] = [scriptName, '', '---', ''];
 
-  let currentTime = 0;
-
-  for (const sceneId of sceneOrder) {
-    const scene = scenes.find(s => s.id === sceneId);
-    if (!scene) continue;
-
-    // Add timestamp and title
-    const timestamp = formatTimestamp(currentTime);
-    lines.push(`${timestamp} - ${scene.title}`);
-
-    // Add references for this scene
-    if (scene.references.length > 0) {
-      for (const ref of scene.references) {
-        lines.push(`  ${ref.label}: ${ref.url}`);
-        if (ref.note) {
-          lines.push(`    ${ref.note}`);
-        }
-      }
-    }
-
-    lines.push('');
-    currentTime += scene.durationSec;
-  }
-
-  return lines.join('\n');
-}
-
-function formatTimestamp(seconds: number): string {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
-}

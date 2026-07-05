@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
-import { v4 as uuidv4 } from 'uuid';
 import type { Script, Scene, DraftVersion, NarrationVersion, Reference } from '../types';
 import * as db from '../services/db';
 
@@ -22,7 +21,7 @@ interface ScriptState {
   addScene: (scriptId: string, afterSceneId?: string, preId?: string) => Promise<Scene>;
   updateScene: (id: string, updates: Partial<Scene>) => void;
   deleteScene: (id: string) => void;
-  restoreScene: (scene: Scene, afterSceneId?: string) => void;
+  restoreScene: (scene: Scene, afterSceneId?: string, preId?: string) => void;
   reorderScenes: (scriptId: string, newOrder: string[]) => void;
 
   // Draft notes actions
@@ -106,7 +105,7 @@ export const useScriptStore = create<ScriptState>()(
             });
           }
         }
-      } catch (error) {
+      } catch {
         set(state => {
           state.error = 'Failed to load scripts';
           state.isLoading = false;
@@ -116,10 +115,8 @@ export const useScriptStore = create<ScriptState>()(
 
     createScript: async (name: string) => {
       const script: Script = {
-        id: uuidv4(),
+        id: crypto.randomUUID(),
         name,
-        titleJP: '',
-        emoji: '',
         paceWordsPerSec: 2.5,
         voiceProfile: '',
         sceneOrder: [],
@@ -178,7 +175,7 @@ export const useScriptStore = create<ScriptState>()(
             state.scenes = scenes;
             state.isLoading = false;
           });
-        } catch (error) {
+        } catch {
           set(state => {
             state.error = 'Failed to load scenes';
             state.isLoading = false;
@@ -196,7 +193,7 @@ export const useScriptStore = create<ScriptState>()(
 
     addScene: async (scriptId: string, afterSceneId?: string, preId?: string) => {
       const scene: Scene = {
-        id: preId || uuidv4(),
+        id: preId || crypto.randomUUID(),
         scriptId,
         title: 'New Scene',
         durationSec: 30,
@@ -242,7 +239,7 @@ export const useScriptStore = create<ScriptState>()(
 
       // Persist to DB in background — don't block the UI
       try {
-        await db.saveScene(scene);
+        await db.saveScene(scene).catch(console.error);
         const script = get().scripts.find(s => s.id === scriptId);
         if (script) await db.saveScript(script);
       } catch (e) {
@@ -263,7 +260,7 @@ export const useScriptStore = create<ScriptState>()(
       // Debounced save would be better in production
       const scene = get().scenes.find(s => s.id === id);
       if (scene) {
-        db.saveScene(scene);
+        db.saveScene(scene).catch(console.error);
       }
     },
 
@@ -286,30 +283,31 @@ export const useScriptStore = create<ScriptState>()(
 
       const script = get().scripts.find(s => s.id === scene.scriptId);
       if (script) {
-        db.saveScript(script);
+        db.saveScript(script).catch(console.error);
       }
     },
 
-    restoreScene: (scene: Scene, afterSceneId?: string) => {
+    restoreScene: (scene: Scene, afterSceneId?: string, preId?: string) => {
+      const finalScene = preId ? { ...scene, id: preId } : scene;
       set(state => {
-        state.scenes.push(scene);
-        const script = state.scripts.find(s => s.id === scene.scriptId);
+        state.scenes.push(finalScene);
+        const script = state.scripts.find(s => s.id === finalScene.scriptId);
         if (script) {
           if (afterSceneId) {
             const idx = script.sceneOrder.indexOf(afterSceneId);
             if (idx !== -1) {
-              script.sceneOrder.splice(idx + 1, 0, scene.id);
+              script.sceneOrder.splice(idx + 1, 0, finalScene.id);
             } else {
-              script.sceneOrder.push(scene.id);
+              script.sceneOrder.push(finalScene.id);
             }
           } else {
-            script.sceneOrder.push(scene.id);
+            script.sceneOrder.push(finalScene.id);
           }
           script.updatedAt = Date.now();
         }
       });
-      db.saveScene(scene).catch(console.error);
-      const script = get().scripts.find(s => s.id === scene.scriptId);
+      db.saveScene(finalScene).catch(console.error);
+      const script = get().scripts.find(s => s.id === finalScene.scriptId);
       if (script) db.saveScript(script).catch(console.error);
     },
 
@@ -324,7 +322,7 @@ export const useScriptStore = create<ScriptState>()(
 
       const script = get().scripts.find(s => s.id === scriptId);
       if (script) {
-        db.saveScript(script);
+        db.saveScript(script).catch(console.error);
       }
     },
 
@@ -343,7 +341,7 @@ export const useScriptStore = create<ScriptState>()(
 
       const scene = get().scenes.find(s => s.id === sceneId);
       if (scene) {
-        db.saveScene(scene);
+        db.saveScene(scene).catch(console.error);
       }
     },
 
@@ -364,7 +362,7 @@ export const useScriptStore = create<ScriptState>()(
 
       const scene = get().scenes.find(s => s.id === sceneId);
       if (scene) {
-        db.saveScene(scene);
+        db.saveScene(scene).catch(console.error);
       }
     },
 
@@ -378,7 +376,7 @@ export const useScriptStore = create<ScriptState>()(
 
       const scene = get().scenes.find(s => s.id === sceneId);
       if (scene) {
-        db.saveScene(scene);
+        db.saveScene(scene).catch(console.error);
       }
     },
 
@@ -402,7 +400,7 @@ export const useScriptStore = create<ScriptState>()(
 
       const scene = get().scenes.find(s => s.id === sceneId);
       if (scene) {
-        db.saveScene(scene);
+        db.saveScene(scene).catch(console.error);
       }
     },
 
@@ -417,7 +415,7 @@ export const useScriptStore = create<ScriptState>()(
           scene.narrationFromDraftIndex = fromDraftIndex;
 
           const version: NarrationVersion = {
-            id: uuidv4(),
+            id: crypto.randomUUID(),
             content: narration,
             wordCount: narration.split(/\s+/).filter(Boolean).length,
             createdAt: Date.now(),
@@ -429,7 +427,7 @@ export const useScriptStore = create<ScriptState>()(
 
       const scene = get().scenes.find(s => s.id === sceneId);
       if (scene) {
-        db.saveScene(scene);
+        db.saveScene(scene).catch(console.error);
       }
     },
 
@@ -456,7 +454,7 @@ export const useScriptStore = create<ScriptState>()(
 
       const scene = get().scenes.find(s => s.id === sceneId);
       if (scene) {
-        db.saveScene(scene);
+        db.saveScene(scene).catch(console.error);
       }
     },
 
@@ -467,7 +465,7 @@ export const useScriptStore = create<ScriptState>()(
         const scene = state.scenes.find(s => s.id === sceneId);
         if (!scene) return;
         const version: NarrationVersion = {
-          id: uuidv4(),
+          id: crypto.randomUUID(),
           content: scene.narration ?? '',
           wordCount: (scene.narration ?? '').split(/\s+/).filter(Boolean).length,
           createdAt: Date.now(),
@@ -476,7 +474,7 @@ export const useScriptStore = create<ScriptState>()(
         scene.currentNarrationVersionIndex = scene.narrationVersions.length - 1;
       });
       const scene = get().scenes.find(s => s.id === sceneId);
-      if (scene) db.saveScene(scene);
+      if (scene) db.saveScene(scene).catch(console.error);
     },
 
     setNarrationVersion: (sceneId: string, index: number) => {
@@ -488,7 +486,7 @@ export const useScriptStore = create<ScriptState>()(
         }
       });
       const scene = get().scenes.find(s => s.id === sceneId);
-      if (scene) db.saveScene(scene);
+      if (scene) db.saveScene(scene).catch(console.error);
     },
 
     deleteNarrationVersion: (sceneId: string, index: number) => {
@@ -504,7 +502,7 @@ export const useScriptStore = create<ScriptState>()(
         scene.narration = scene.narrationVersions[scene.currentNarrationVersionIndex]?.content ?? null;
       });
       const scene = get().scenes.find(s => s.id === sceneId);
-      if (scene) db.saveScene(scene);
+      if (scene) db.saveScene(scene).catch(console.error);
     },
 
     // === Fixed Toggle ===
@@ -519,7 +517,7 @@ export const useScriptStore = create<ScriptState>()(
 
       const scene = get().scenes.find(s => s.id === sceneId);
       if (scene) {
-        db.saveScene(scene);
+        db.saveScene(scene).catch(console.error);
       }
     },
 
@@ -531,14 +529,14 @@ export const useScriptStore = create<ScriptState>()(
         if (scene) {
           scene.references.push({
             ...reference,
-            id: uuidv4(),
+            id: crypto.randomUUID(),
           });
         }
       });
 
       const scene = get().scenes.find(s => s.id === sceneId);
       if (scene) {
-        db.saveScene(scene);
+        db.saveScene(scene).catch(console.error);
       }
     },
 
@@ -555,7 +553,7 @@ export const useScriptStore = create<ScriptState>()(
 
       const scene = get().scenes.find(s => s.id === sceneId);
       if (scene) {
-        db.saveScene(scene);
+        db.saveScene(scene).catch(console.error);
       }
     },
 
@@ -569,7 +567,7 @@ export const useScriptStore = create<ScriptState>()(
 
       const scene = get().scenes.find(s => s.id === sceneId);
       if (scene) {
-        db.saveScene(scene);
+        db.saveScene(scene).catch(console.error);
       }
     },
 
@@ -603,7 +601,7 @@ export const useScriptStore = create<ScriptState>()(
 
       const scene = get().scenes.find(s => s.id === sceneId);
       if (scene) {
-        db.saveScene(scene);
+        db.saveScene(scene).catch(console.error);
       }
     },
 
@@ -622,7 +620,7 @@ export const useScriptStore = create<ScriptState>()(
 
       const scene = get().scenes.find(s => s.id === sceneId);
       if (scene) {
-        db.saveScene(scene);
+        db.saveScene(scene).catch(console.error);
       }
     },
 
@@ -645,7 +643,7 @@ export const useScriptStore = create<ScriptState>()(
               return existing; // preserve id and isChecked
             }
             return {
-              id: uuidv4(),
+              id: crypto.randomUUID(),
               text: trimmed,
               isChecked: false,
             };
@@ -655,7 +653,7 @@ export const useScriptStore = create<ScriptState>()(
 
       const scene = get().scenes.find(s => s.id === sceneId);
       if (scene) {
-        db.saveScene(scene);
+        db.saveScene(scene).catch(console.error);
       }
     },
 
@@ -663,10 +661,10 @@ export const useScriptStore = create<ScriptState>()(
 
     saveToDb: async () => {
       const { scripts, scenes } = get();
-      for (const script of scripts) {
-        await db.saveScript(script);
-      }
-      await db.saveScenes(scenes);
+      await Promise.all([
+        ...scripts.map(s => db.saveScript(s)),
+        db.saveScenes(scenes),
+      ]);
     },
 
     // === Helpers ===

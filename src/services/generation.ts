@@ -45,8 +45,8 @@ export async function generateNarration(
   let lastNarration = '';
   let lastWordCount = 0;
 
-  // GPT-o* and GPT-5* reasoning models don't support temperature
-  const isReasoningModel = model.startsWith('o') || model.startsWith('gpt-5');
+  // Reasoning models (o-series, o3, o4, GPT-5) don't support temperature
+  const isReasoningModel = /^o\d|^gpt-5/.test(model);
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     onProgress?.(attempt);
@@ -82,17 +82,17 @@ export async function generateNarration(
       console.log(`[gen] ${model} attempt ${attempt}: ${res.status} in ${Math.round(performance.now() - t0)}ms`);
 
       if (!res.ok) {
-        let errJson: any = {};
+        let errJson: Record<string, unknown> = {};
         const rawText = await res.text();
-        try { errJson = JSON.parse(rawText); } catch { /* ignore */ }
-        const errMsg = errJson?.error?.message || res.statusText || 'Unknown error';
-        const errCode = errJson?.error?.code || '';
+        try { errJson = JSON.parse(rawText) as Record<string, unknown>; } catch { /* ignore */ }
+        const errBody = errJson.error as Record<string, unknown> | undefined;
+        const errMsg = typeof errBody?.message === 'string' ? errBody.message : res.statusText || 'Unknown error';
+        const errCode = typeof errBody?.code === 'string' ? errBody.code : '';
         const status = res.status;
-        const keyHint = apiKey ? `key=${apiKey.slice(0, 7)}...${apiKey.slice(-4)}` : 'no key';
 
-        console.error(`OpenAI ${status} (${keyHint}):`, rawText);
+        console.error(`OpenAI ${status}:`, rawText);
 
-        if (status === 401) return { sceneId: scene.id, success: false, error: `401 ${keyHint}: ${errMsg}` };
+        if (status === 401) return { sceneId: scene.id, success: false, error: `401: ${errMsg}` };
         if (status === 404) return { sceneId: scene.id, success: false, error: `Model "${model}" not found. Check model name in Settings.` };
         if (status === 429) {
           if (attempt < maxAttempts) { await sleep(2000 * attempt); continue; }
@@ -129,13 +129,15 @@ Your previous attempt had ${wordCount} words, but I need exactly ${target.target
 Please write a ${direction} version. Add or remove approximately ${diff} words.
 Do NOT apologize or explain - just write the corrected narration.`;
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(`[gen] fetch error (model=${model}, attempt=${attempt}):`, error);
-      if (error?.name === 'AbortError') {
+      const err = error as { name?: string; message?: string } | undefined;
+      if (err?.name === 'AbortError') {
         return { sceneId: scene.id, success: false, error: 'Request timed out after 60 seconds. Check your network connection.' };
       }
-      const msg = error?.message || String(error);
-      return { sceneId: scene.id, success: false, error: `Network error: ${msg}` };
+      const msg = err?.message || String(error);
+      const proxyNote = !import.meta.env.DEV ? ' LLM proxy is only available in development mode. Build a server-side proxy for production.' : '';
+      return { sceneId: scene.id, success: false, error: `Network error: ${msg}${proxyNote}` };
     }
   }
 
@@ -203,19 +205,21 @@ function buildScriptContext(script: Script, allScenes: Scene[], targetSceneId: s
 
   const lines: string[] = ['FULL SCRIPT CONTEXT (for tone and continuity — do NOT rewrite these):'];
 
+  let sceneNum = 1;
   for (const s of ordered) {
     if (s.id === targetSceneId) {
-      lines.push(`\n>>> SCENE ${ordered.indexOf(s) + 1}: "${s.title}" [${s.durationSec}s] <<<  ← GENERATE THIS ONE`);
+      lines.push(`\n>>> SCENE ${sceneNum}: "${s.title}" [${s.durationSec}s] <<<  ← GENERATE THIS ONE`);
       if (s.narration) lines.push(`  (current narration: ${s.narration})`);
       lines.push(`  (on-screen: ${s.onScreenTexts.map(t => t.text).join(', ') || 'none'})`);
     } else {
-      lines.push(`\nScene ${ordered.indexOf(s) + 1}: "${s.title}" [${s.durationSec}s]`);
+      lines.push(`\nScene ${sceneNum}: "${s.title}" [${s.durationSec}s]`);
       if (s.narration) {
         lines.push(`  Narration: ${s.narration}`);
       } else {
         lines.push(`  (no narration yet)`);
       }
     }
+    sceneNum++;
   }
 
   return lines.join('\n');
@@ -359,7 +363,7 @@ Please generate:
 
 Return JSON only, no markdown fences.`;
 
-  const isReasoningModel = model.startsWith('o') || model.startsWith('gpt-5');
+  const isReasoningModel = /^o\d|^gpt-5/.test(model);
   const body: Record<string, unknown> = {
     model,
     messages: [
@@ -419,11 +423,13 @@ Return JSON only, no markdown fences.`;
     parsed.references = Array.isArray(parsed.references) ? parsed.references : allRefs;
 
     return { success: true, data: parsed };
-  } catch (error: any) {
+  } catch (error: unknown) {
     clearTimeout(timeout);
-    if (error?.name === 'AbortError') {
+    const err = error as { name?: string; message?: string } | undefined;
+    if (err?.name === 'AbortError') {
       return { success: false, error: 'Request timed out after 90 seconds.' };
     }
-    return { success: false, error: `Network error: ${error?.message || String(error)}` };
+    const proxyNote = !import.meta.env.DEV ? ' LLM proxy is only available in development mode. Build a server-side proxy for production.' : '';
+    return { success: false, error: `Network error: ${err?.message || String(error)}${proxyNote}` };
   }
 }

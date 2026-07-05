@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { PenIcon, MenuIcon, GenerateIcon, LockedIcon, UnlockedIcon, ImportMenuIcon, ExportMenuIcon, YouTubeDescIcon } from '../Icons';
+import { PenIcon, MenuIcon, GenerateIcon, LockedIcon, UnlockedIcon, ImportMenuIcon, ExportMenuIcon, YouTubeDescIcon, AnimatedThemeIcon } from '../Icons';
 import { useScriptStore } from '../../stores/scriptStore';
 import { useUIStore } from '../../stores/uiStore';
 import { ABOUT_SPEED } from '../../constants';
@@ -37,6 +37,8 @@ export function LeftBar() {
     timelinePreviewActive,
     setTimelinePreviewActive,
     setYtDescModalOpen,
+    darkMode,
+    toggleDarkMode,
   } = useUIStore();
 
   const [generateMenuOpen, setGenerateMenuOpen] = useState(false);
@@ -331,25 +333,13 @@ export function LeftBar() {
                   writingMode: 'vertical-rl',
                   transform: 'rotate(180deg)',
                   marginTop: '12px',
+                  userSelect: 'none',
+                  cursor: 'default',
                 }}
               >
                 {script.name}
               </span>
-              {script.titleJP && (
-                <span
-                  className="text-[var(--color-accent)]"
-                  style={{
-                    fontFamily: 'var(--font-body)',
-                    writingMode: 'vertical-rl',
-                    fontSize: '26px',
-                    letterSpacing: '0.1em',
-                    lineHeight: '1',
-                    marginTop: '16px'
-                  }}
-                >
-                  {script.titleJP}
-                </span>
-              )}
+              
             </div>
           )}
         </div>
@@ -364,6 +354,15 @@ export function LeftBar() {
           pointerEvents: aboutContentVisible ? 'auto' : 'none',
         }}
       >
+        {/* Dark mode toggle — above scripts button */}
+        <button
+          onClick={toggleDarkMode}
+          className="p-2 text-[#9A9A9A] hover:text-[var(--color-accent)] transition-colors"
+          title={darkMode ? 'Light mode' : 'Dark mode'}
+        >
+          <AnimatedThemeIcon darkMode={darkMode} size={24} />
+        </button>
+
         {/* Scripts panel toggle (burger) */}
         <button
           onClick={toggleSidebar}

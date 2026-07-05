@@ -2,7 +2,7 @@ import Dexie, { type Table } from 'dexie';
 import type { Script, Scene } from '../types';
 
 // Schema version - increment this when you change data structure
-const CURRENT_SCHEMA_VERSION = 5;
+const CURRENT_SCHEMA_VERSION = 6;
 const SCHEMA_VERSION_KEY = 'scenescript_schema_version';
 
 export class SceneScriptDB extends Dexie {
@@ -83,46 +83,55 @@ export class SceneScriptDB extends Dexie {
           }
         }
       });
+
+    // Version 6: Remove titleJP and emoji fields from Script
+    this.version(6)
+      .stores({
+        scripts: 'id, name, updatedAt, status',
+        scenes: 'id, scriptId',
+      })
+      .upgrade(async tx => {
+        const scripts = await tx.table('scripts').toArray();
+        for (const script of scripts) {
+          const { titleJP, emoji, ...rest } = script;
+          await tx.table('scripts').put(rest);
+        }
+      });
   }
 }
 
 // Validate that stored data matches current schema
-function validateScript(script: any): script is Script {
-  // Default new fields
-  if (script && typeof script.emoji === 'undefined') {
-    script.emoji = '';
-  }
-  if (script && typeof script.titleJP === 'undefined') {
-    script.titleJP = '';
-  }
+function validateScript(script: unknown): script is Script {
+  const s = script as Record<string, unknown>;
   return (
-    typeof script.id === 'string' &&
-    typeof script.name === 'string' &&
-    typeof script.paceWordsPerSec === 'number' &&
-    typeof script.voiceProfile === 'string' &&
-    Array.isArray(script.sceneOrder) &&
-    typeof script.status === 'string' &&
-    ['backlog', 'in-progress', 'done'].includes(script.status) &&
-    typeof script.createdAt === 'number' &&
-    typeof script.updatedAt === 'number'
+    typeof s.id === 'string' &&
+    typeof s.name === 'string' &&
+    typeof s.paceWordsPerSec === 'number' &&
+    typeof s.voiceProfile === 'string' &&
+    Array.isArray(s.sceneOrder) &&
+    typeof s.status === 'string' &&
+    (['backlog', 'in-progress', 'done'] as string[]).includes(s.status as string) &&
+    typeof s.createdAt === 'number' &&
+    typeof s.updatedAt === 'number'
   );
 }
 
-export function validateScene(scene: any): scene is Scene {
-  if (scene && !Array.isArray(scene.narrationVersions)) {
-    scene.narrationVersions = [];
-    scene.currentNarrationVersionIndex = -1;
+export function validateScene(scene: unknown): scene is Scene {
+  const s = scene as Record<string, unknown> | null;
+  if (s && !Array.isArray(s.narrationVersions)) {
+    s.narrationVersions = [];
+    s.currentNarrationVersionIndex = -1;
   }
   return (
-    typeof scene.id === 'string' &&
-    typeof scene.scriptId === 'string' &&
-    typeof scene.title === 'string' &&
-    typeof scene.durationSec === 'number' &&
-    typeof scene.isFixed === 'boolean' &&
-    Array.isArray(scene.draftVersions) &&
-    typeof scene.currentDraftIndex === 'number' &&
-    Array.isArray(scene.onScreenTexts) &&
-    Array.isArray(scene.references)
+    typeof s?.id === 'string' &&
+    typeof s?.scriptId === 'string' &&
+    typeof s?.title === 'string' &&
+    typeof s?.durationSec === 'number' &&
+    typeof s?.isFixed === 'boolean' &&
+    Array.isArray(s?.draftVersions) &&
+    typeof s?.currentDraftIndex === 'number' &&
+    Array.isArray(s?.onScreenTexts) &&
+    Array.isArray(s?.references)
   );
 }
 
@@ -147,10 +156,8 @@ async function checkSchemaVersion(): Promise<boolean> {
 
   if (stored > CURRENT_SCHEMA_VERSION) {
     // User has newer data (e.g., from a newer version, then downgraded)
-    console.warn('Data schema is newer than app version. Resetting database.');
-    await clearAllData();
-    localStorage.setItem(SCHEMA_VERSION_KEY, CURRENT_SCHEMA_VERSION.toString());
-    return false; // Data was reset
+    console.warn('Data schema is newer than app version. Some features may not work correctly.');
+    return false;
   }
 
   return true; // Versions match
@@ -368,7 +375,7 @@ export async function forceSchemaReset(): Promise<void> {
 
 // Expose reset function to browser console in development
 if (import.meta.env.DEV) {
-  (window as any).resetDatabase = forceSchemaReset;
+  (window as unknown as Record<string, unknown>).resetDatabase = forceSchemaReset;
   console.log('💡 Development mode: Call resetDatabase() to force clear database');
 }
 

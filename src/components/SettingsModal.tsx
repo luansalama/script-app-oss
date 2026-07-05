@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { useScriptStore } from '../stores/scriptStore';
 import { useUIStore } from '../stores/uiStore';
+import { pushUndo } from '../utils/undoHistory';
 import type React from 'react';
 import {
   getStoredModel,
@@ -13,14 +14,14 @@ import {
 } from '../services/db';
 
 const inputStyle: React.CSSProperties = {
-  height: 40, borderRadius: 8, border: '0.5px solid #E6E6E6',
+  height: 40, borderRadius: 8, border: '0.5px solid var(--color-border)',
   paddingLeft: 10, fontSize: 13, outline: 'none', flexShrink: 0,
   margin: 0, background: 'transparent', fontWeight: 500, width: '100%',
-  boxSizing: 'border-box',
+  boxSizing: 'border-box', color: 'var(--color-text)',
 };
 
 const labelStyle: React.CSSProperties = {
-  fontSize: 11, fontWeight: 500, color: 'rgba(0,0,0,0.4)',
+  fontSize: 11, fontWeight: 500, color: 'var(--color-text-inverted)',
   marginBottom: 6, display: 'block',
 };
 
@@ -76,7 +77,9 @@ export function SettingsModal() {
     if (!script) return;
     const pace = parseFloat(value);
     if (!isNaN(pace) && pace > 0) {
+      const oldPace = script.paceWordsPerSec;
       updateScript(script.id, { paceWordsPerSec: pace });
+      pushUndo({ label: `Change pace to ${pace}`, undo: () => updateScript(script.id, { paceWordsPerSec: oldPace }) });
     }
   };
 
@@ -94,8 +97,8 @@ export function SettingsModal() {
           left: 200, top: '50%',
           width: 314,
           borderRadius: 16,
-          border: '0.5px solid #E6E6E6',
-          background: 'white',
+          border: '0.5px solid var(--color-border)',
+          background: 'var(--color-card-bg)',
           padding: 16,
           display: 'flex',
           flexDirection: 'column',
@@ -139,7 +142,7 @@ export function SettingsModal() {
                 style={{
                   position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
                   background: 'none', border: 'none', cursor: 'pointer',
-                  color: 'rgba(0,0,0,0.3)', padding: 4,
+                  color: 'var(--color-text-inverted)', padding: 4,
                 }}
               >
                 {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -176,7 +179,7 @@ export function SettingsModal() {
           )}
 
           {/* Typography */}
-          <div style={{ borderTop: '0.5px solid rgba(0,0,0,0.08)', paddingTop: 16 }}>
+          <div style={{ borderTop: '0.5px solid var(--color-border)', paddingTop: 16 }}>
             <span style={{ ...labelStyle, marginBottom: 12, display: 'block' }}>Typography</span>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -208,8 +211,8 @@ export function SettingsModal() {
               onClick={() => setSettingsModalOpen(false)}
               style={{
                 flex: 1, height: 40, borderRadius: 8,
-                border: '0.5px solid #E6E6E6', background: 'transparent',
-                cursor: 'pointer', fontSize: 13, fontWeight: 500, color: '#7C7C7C',
+                border: '0.5px solid var(--color-border)', background: 'transparent',
+                cursor: 'pointer', fontSize: 13, fontWeight: 500, color: 'var(--color-text-inverted)',
               }}
             >
               Cancel
@@ -218,7 +221,7 @@ export function SettingsModal() {
               onClick={() => setSettingsModalOpen(false)}
               style={{
                 flex: 1, height: 40, borderRadius: 8,
-                background: 'var(--color-accent)', color: 'white',
+                background: 'var(--color-accent)', color: 'var(--color-black)',
                 border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500,
               }}
             >

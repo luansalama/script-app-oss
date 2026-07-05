@@ -347,6 +347,70 @@ export function InfoIcon({
   );
 }
 
+export function SunIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      <circle cx="12" cy="12" r="4.5" stroke="currentColor" strokeWidth="2" />
+      <path d="M12 1V4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M12 20V23" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M4.22 4.22L6.34 6.34" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M17.66 17.66L19.78 19.78" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M1 12H4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M20 12H23" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M4.22 19.78L6.34 17.66" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M17.66 6.34L19.78 4.22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function MoonIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      <path d="M12.5 2C12.5 2 7 4.5 7 12C7 19.5 12.5 22 12.5 22C10.5 22 4 18.5 4 12C4 5.5 10.5 2 12.5 2Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+/* ── Animated theme toggle icon ──
+    Sun and moon crossfade with rotation. Stars appear beside moon in dark mode. */
+export function AnimatedThemeIcon({ darkMode, size = 24 }: { darkMode: boolean; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={{ display: 'block' }}>
+      {/* Sun icon group */}
+      <g style={{
+        transformOrigin: '12px 12px',
+        transform: darkMode ? 'rotate(90deg) scale(0)' : 'rotate(0deg) scale(1)',
+        opacity: darkMode ? 0 : 1,
+        transition: 'transform 0.5s ease, opacity 0.5s ease',
+      }}>
+        <circle cx="12" cy="12" r="4.5" stroke="currentColor" strokeWidth="2" />
+        <path d="M12 1V4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        <path d="M12 20V23" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        <path d="M4.22 4.22L6.34 6.34" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        <path d="M17.66 17.66L19.78 19.78" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        <path d="M1 12H4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        <path d="M20 12H23" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        <path d="M4.22 19.78L6.34 17.66" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        <path d="M17.66 6.34L19.78 4.22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      </g>
+
+      {/* Moon icon group + stars */}
+      <g style={{
+        transformOrigin: '12px 12px',
+        transform: darkMode ? 'rotate(0deg) scale(1)' : 'rotate(-90deg) scale(0)',
+        opacity: darkMode ? 1 : 0,
+        transition: 'transform 0.5s ease, opacity 0.5s ease',
+      }}>
+        <path d="M12.5 2 C12.5 2 7 4.5 7 12 C7 19.5 12.5 22 12.5 22 C10.5 22 2.5 18.5 2.5 12 C2.5 5.5 10.5 2 12.5 2 Z" fill="currentColor" />
+        {/* Stars — clustered top-right, outside moon */}
+        <path d="M18 2 Q18 4 20 4 Q18 4 18 6 Q18 4 16 4 Q18 4 18 2Z" fill="currentColor" />
+        <path d="M16 5 Q16 6.5 17.5 6.5 Q16 6.5 16 8 Q16 6.5 14.5 6.5 Q16 6.5 16 5Z" fill="currentColor" />
+        <path d="M19.5 6.5 Q19.5 7.5 20.5 7.5 Q19.5 7.5 19.5 8.5 Q19.5 7.5 18.5 7.5 Q19.5 7.5 19.5 6.5Z" fill="currentColor" />
+      </g>
+    </svg>
+  );
+}
+
 export function NewSceneIcon({ size = 50, className }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 50 50" fill="none" className={className}>

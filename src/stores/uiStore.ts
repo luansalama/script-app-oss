@@ -45,9 +45,10 @@ interface UIState {
   pendingScriptSwitch: string | null;
   setPendingScriptSwitch: (id: string | null) => void;
 
-  // Version browsing modal
-  versionBrowsingSceneId: string | null;
-  setVersionBrowsingSceneId: (id: string | null) => void;
+  // Version browsing modal — supports multiple cards open at once
+  versionBrowsingSceneIds: string[];
+  addVersionBrowsingSceneId: (id: string) => void;
+  removeVersionBrowsingSceneId: (id: string) => void;
 
   // Timeline preview (hover on total duration)
   timelinePreviewActive: boolean;
@@ -59,10 +60,16 @@ interface UIState {
   setMainFontSize: (v: number) => void;
   setMainLineHeight: (v: number) => void;
 
+  // Dark mode
+  darkMode: boolean;
+  setDarkMode: (v: boolean) => void;
+  toggleDarkMode: () => void;
+
   // Toast notifications
   toasts: Toast[];
   addToast: (toast: Omit<Toast, 'id'>) => void;
   removeToast: (id: string) => void;
+  cleanupToast: (id: string) => void;
 }
 
 export interface Toast {
@@ -71,6 +78,7 @@ export interface Toast {
   message: string;
   duration?: number;
   action?: { label: string; onClick: () => void };
+  closing?: boolean;
 }
 
 let toastIdCounter = 0;
@@ -190,11 +198,17 @@ export const useUIStore = create<UIState>()(
         state.pendingScriptSwitch = id;
       }),
 
-    // Version browsing modal
-    versionBrowsingSceneId: null,
-    setVersionBrowsingSceneId: (id: string | null) =>
+    // Version browsing modal — supports multiple cards open at once
+    versionBrowsingSceneIds: [],
+    addVersionBrowsingSceneId: (id: string) =>
       set(state => {
-        state.versionBrowsingSceneId = id;
+        if (!state.versionBrowsingSceneIds.includes(id)) {
+          state.versionBrowsingSceneIds.push(id);
+        }
+      }),
+    removeVersionBrowsingSceneId: (id: string) =>
+      set(state => {
+        state.versionBrowsingSceneIds = state.versionBrowsingSceneIds.filter(sid => sid !== id);
       }),
 
     // Timeline preview
@@ -216,6 +230,18 @@ export const useUIStore = create<UIState>()(
       set(state => { state.mainLineHeight = v; });
     },
 
+    // Dark mode — persisted to localStorage
+    darkMode: localStorage.getItem('darkMode') === 'true',
+    setDarkMode: (v: boolean) => {
+      localStorage.setItem('darkMode', String(v));
+      set(state => { state.darkMode = v; });
+    },
+    toggleDarkMode: () => {
+      const next = !get().darkMode;
+      localStorage.setItem('darkMode', String(next));
+      set(state => { state.darkMode = next; });
+    },
+
     // Toast notifications
     toasts: [],
     addToast: (toast: Omit<Toast, 'id'>) =>
@@ -226,12 +252,16 @@ export const useUIStore = create<UIState>()(
         // Auto-remove after duration
         const duration = toast.duration ?? 4000;
         setTimeout(() => {
-          set(s => {
-            s.toasts = s.toasts.filter(t => t.id !== id);
-          });
+          get().removeToast(id);
+          setTimeout(() => get().cleanupToast(id), 300);
         }, duration);
       }),
     removeToast: (id: string) =>
+      set(state => {
+        const toast = state.toasts.find(t => t.id === id);
+        if (toast) toast.closing = true;
+      }),
+    cleanupToast: (id: string) =>
       set(state => {
         state.toasts = state.toasts.filter(t => t.id !== id);
       }),

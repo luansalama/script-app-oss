@@ -83,18 +83,18 @@ export function ApiKeyModal() {
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
-          className="bg-white rounded-xl border border-[var(--color-border)] shadow-2xl w-full max-w-md"
+          className="bg-[var(--color-card-bg)] rounded-xl border border-[var(--color-border)] shadow-2xl w-full max-w-md"
           onClick={e => e.stopPropagation()}
         >
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border)]">
             <div className="flex items-center gap-2">
               <ApiKeyIcon size={20} className="text-[var(--color-accent)]" />
-              <h2 className="text-lg font-semibold text-black font-headline">OpenAI API Key</h2>
+              <h2 className="text-lg font-semibold text-[var(--color-text)] font-headline">OpenAI API Key</h2>
             </div>
             <button
               onClick={() => setApiKeyModalOpen(false)}
-              className="p-1 text-black/40 hover:text-black hover:bg-black/5 rounded"
+              className="p-1 modal-close rounded"
             >
               <CloseIcon size={20} />
             </button>
@@ -102,13 +102,13 @@ export function ApiKeyModal() {
 
           {/* Content */}
           <div className="p-5 space-y-4">
-            <p className="text-sm text-black/50">
+            <p className="text-sm text-[var(--color-text-inverted)]">
               Your API key is stored locally in your browser and is never sent to any server
               except OpenAI directly.
             </p>
 
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-black/70">
+              <label className="block text-sm font-medium text-[var(--color-text)]">
                 API Key
               </label>
               <div className="relative">
@@ -117,12 +117,12 @@ export function ApiKeyModal() {
                   value={apiKey}
                   onChange={e => setApiKey(e.target.value)}
                   placeholder="sk-..."
-                  className="w-full bg-black/5 rounded-lg px-4 py-2.5 pr-10 text-black placeholder-black/30 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                  className="w-full bg-[color-mix(in_srgb,var(--color-border)_20%,transparent)] rounded-lg px-4 py-2.5 pr-10 text-[var(--color-text)] placeholder-[var(--color-text-inverted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
                 />
                 <button
                   type="button"
                   onClick={() => setShowKey(!showKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 hover:text-black/70"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-text-inverted)] hover:text-[var(--color-text)]"
                 >
                   {showKey ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -141,7 +141,7 @@ export function ApiKeyModal() {
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between px-5 py-4 border-t border-[var(--color-border)] bg-black/[0.02] rounded-b-xl">
+          <div className="flex items-center justify-between px-5 py-4 border-t border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-border)_5%,transparent)] rounded-b-xl">
             {hasExistingKey ? (
               <button
                 onClick={handleClear}
@@ -156,7 +156,7 @@ export function ApiKeyModal() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setApiKeyModalOpen(false)}
-                className="px-4 py-2 text-sm text-black/50 hover:text-black hover:bg-black/5 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm text-[var(--color-text-inverted)] hover:text-[var(--color-text)] hover:bg-[color-mix(in_srgb,var(--color-border)_20%,transparent)] rounded-lg transition-colors"
               >
                 Cancel
               </button>

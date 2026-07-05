@@ -58,25 +58,4 @@ export function calculateFit(
   return { status, percent: Math.round(percent * 10) / 10 };
 }
 
-/**
- * Format duration as MM:SS
- */
-export function formatDuration(seconds: number): string {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
-}
 
-/**
- * Format total duration as HH:MM:SS or MM:SS depending on length
- */
-export function formatTotalDuration(seconds: number): string {
-  const hours = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-
-  if (hours > 0) {
-    return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  }
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
-}

@@ -44,10 +44,11 @@ function llmProxy(): Plugin {
             });
             const body = Buffer.from(await upstream.arrayBuffer());
             res.end(body);
-          } catch (err: any) {
-            console.error('[llm-proxy]', err?.message || err);
+          } catch (err: unknown) {
+            const e = err as { message?: string };
+            console.error('[llm-proxy]', e?.message || err);
             res.writeHead(502, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: { message: `Proxy error: ${err?.message}` } }));
+            res.end(JSON.stringify({ error: { message: `Proxy error: ${e?.message}` } }));
           }
         });
       });

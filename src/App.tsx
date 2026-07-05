@@ -11,16 +11,41 @@ import { useUIStore } from './stores/uiStore';
 import { getStoredApiKey, clearAllData, initializeDatabase } from './services/db';
 import { seedWithSampleNarrations } from './utils/seedData';
 
+// Pre-allocate offscreen canvas + ImageData for noise generation
+const NOISE_SIZE = 256;
+const noiseCanvas = document.createElement('canvas');
+noiseCanvas.width = NOISE_SIZE;
+noiseCanvas.height = NOISE_SIZE;
+const noiseCtx = noiseCanvas.getContext('2d')!;
+const noiseData = noiseCtx.createImageData(NOISE_SIZE, NOISE_SIZE);
+const noisePixels = noiseData.data;
+
+function generateNoiseFrame(): string {
+  for (let i = 0; i < noisePixels.length; i += 4) {
+    const val = 128 + Math.floor((Math.random() - 0.5) * 64);
+    noisePixels[i] = val;
+    noisePixels[i + 1] = val;
+    noisePixels[i + 2] = val;
+    noisePixels[i + 3] = 255;
+  }
+  noiseCtx.putImageData(noiseData, 0, 0);
+  return noiseCanvas.toDataURL('image/png');
+}
+
+// Generate first frame immediately so inline style works from the start
+const initialNoiseUrl = generateNoiseFrame();
+
 function App() {
   const { loadScripts, setActiveScript, scripts, isLoading } = useScriptStore();
-  const { addToast, mainFontSize, mainLineHeight, setSidebarOpen, sidebarOpen } = useUIStore();
+  const { addToast, mainFontSize, mainLineHeight, setSidebarOpen, sidebarOpen, darkMode } = useUIStore();
 
-  // Apply typography settings to CSS custom properties
+  // Apply typography settings to CSS custom properties and sync dark mode to <html>
   useEffect(() => {
     const root = document.documentElement;
     root.style.setProperty('--main-font-size', `${mainFontSize}px`);
     root.style.setProperty('--main-line-height', String(mainLineHeight));
-  }, [mainFontSize, mainLineHeight]);
+    root.classList.toggle('dark-mode', darkMode);
+  }, [mainFontSize, mainLineHeight, darkMode]);
   const [seeding, setSeeding] = useState(false);
   const [dbInitialized, setDbInitialized] = useState(false);
 
@@ -63,6 +88,17 @@ function App() {
       return () => clearTimeout(timer);
     }
   }, [addToast]);
+
+  // True film grain: regenerate noise at ~24fps
+  // Stores the current frame as CSS var --noise-bg so .main-content::before picks it up
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--noise-bg', `url(${initialNoiseUrl})`);
+    const id = setInterval(() => {
+      root.style.setProperty('--noise-bg', `url(${generateNoiseFrame()})`);
+    }, 1000 / 24);
+    return () => clearInterval(id);
+  }, []);
 
   const handleSeedData = async () => {
     setSeeding(true);

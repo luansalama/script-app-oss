@@ -7,18 +7,18 @@ import { generateYTDescriptionLLM, type YTDescriptionResult } from '../services/
 type Phase = 'loading' | 'error' | 'done';
 
 const sectionLabelStyle: React.CSSProperties = {
-  fontSize: 11, fontWeight: 500, color: 'rgba(0,0,0,0.4)',
+  fontSize: 11, fontWeight: 500, color: 'var(--color-text-inverted)',
   textTransform: 'uppercase', letterSpacing: '0.05em',
   marginBottom: 8,
 };
 
 const sectionBoxStyle: React.CSSProperties = {
-  background: 'rgba(0,0,0,0.03)',
+  background: 'rgba(128,128,128,0.08)',
   borderRadius: 10,
   padding: 12,
   fontSize: 13,
   lineHeight: 1.55,
-  color: '#333',
+  color: 'var(--color-text)',
   position: 'relative',
 };
 
@@ -35,7 +35,7 @@ function CopyBtn({ text }: { text: string }) {
       onClick={handleCopy}
       style={{
         position: 'absolute', top: 8, right: 8,
-        background: 'white', border: '0.5px solid #E6E6E6',
+        background: 'var(--color-card-bg)', border: '0.5px solid var(--color-border)',
         borderRadius: 6, padding: 4,
         cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
         opacity: copied ? 1 : 0.5,
@@ -60,6 +60,7 @@ export function YTDescriptionModal() {
 
   const generate = useCallback(async () => {
     if (!script) return;
+    setData(null);
     setPhase('loading');
     setError('');
     const result = await generateYTDescriptionLLM(script, scenes);
@@ -74,7 +75,6 @@ export function YTDescriptionModal() {
 
   useEffect(() => {
     if (ytDescModalOpen) {
-      setData(null);
       generate();
     }
   }, [ytDescModalOpen, generate]);
@@ -127,8 +127,9 @@ export function YTDescriptionModal() {
           width: 480,
           maxHeight: 'calc(100vh - 80px)',
           borderRadius: 16,
-          border: '0.5px solid #E6E6E6',
-          background: 'white',
+          border: '0.5px solid var(--color-border)',
+          background: 'var(--color-card-bg)',
+          color: 'var(--color-text)',
           padding: 20,
           display: 'flex',
           flexDirection: 'column',
@@ -146,7 +147,8 @@ export function YTDescriptionModal() {
           </span>
           <button
             onClick={() => setYtDescModalOpen(false)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, opacity: 0.4 }}
+            className="modal-close"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
           >
             <X size={18} />
           </button>
@@ -156,21 +158,21 @@ export function YTDescriptionModal() {
         {phase === 'loading' && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '40px 0' }}>
             <Loader2 size={28} className="animate-spin" style={{ opacity: 0.4 }} />
-            <span style={{ fontSize: 13, color: 'rgba(0,0,0,0.4)' }}>Generating description...</span>
+            <span style={{ fontSize: 13, color: 'var(--color-text-inverted)' }}>Generating description...</span>
           </div>
         )}
 
         {/* Error */}
         {phase === 'error' && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '32px 0' }}>
-            <span style={{ fontSize: 13, color: '#d44', textAlign: 'center' }}>{error}</span>
+            <span style={{ fontSize: 13, color: 'var(--color-error, #d44)', textAlign: 'center' }}>{error}</span>
             <button
               onClick={generate}
               style={{
                 fontSize: 13, fontWeight: 500,
                 padding: '8px 20px', borderRadius: 8,
-                border: '0.5px solid #E6E6E6',
-                background: 'white', cursor: 'pointer',
+                border: '0.5px solid var(--color-border)',
+                background: 'var(--color-card-bg)', cursor: 'pointer',
               }}
             >
               Retry
@@ -239,7 +241,7 @@ export function YTDescriptionModal() {
                       key={i}
                       style={{
                         fontSize: 12, fontWeight: 500,
-                        background: 'rgba(0,0,0,0.06)',
+                        background: 'rgba(128,128,128,0.12)',
                         borderRadius: 6, padding: '3px 8px',
                       }}
                     >
@@ -257,8 +259,8 @@ export function YTDescriptionModal() {
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                 fontSize: 13, fontWeight: 500,
                 padding: '10px 0', borderRadius: 10,
-                border: '0.5px solid #E6E6E6',
-                background: 'white', cursor: 'pointer',
+                border: '0.5px solid var(--color-border)',
+                background: 'var(--color-card-bg)', cursor: 'pointer',
                 flexShrink: 0,
               }}
             >

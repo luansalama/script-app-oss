@@ -1,16 +1,16 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Loader2 } from 'lucide-react';
-import { DeleteIcon, GenerateIcon, DragIcon, LockedIcon, UnlockedIcon } from '../Icons';
+import { DeleteIcon, GenerateIcon, LockedIcon, UnlockedIcon } from '../Icons';
 import { useUIStore } from '../../stores/uiStore';
 import { ABOUT_SPEED } from '../../constants';
 import { countWords } from '../../utils/wordCount';
 import type { SceneWithComputed } from '../../types';
 
 /* Max number of characters allowed in a scene title. */
-const TITLE_MAX_LENGTH = 8;
+const TITLE_MAX_LENGTH = 10;
 
 /* ── Local on-screen item (keeps a stable key for React reconciliation) ── */
 interface LocalOnScreenItem {
@@ -121,19 +121,19 @@ function InputCard({ children, isLocked, show, borderOnly, style, onMouseEnter, 
       onMouseEnter={() => { setSelfHovered(true); onMouseEnter?.(); }}
       onMouseLeave={() => { setSelfHovered(false); onMouseLeave?.(); }}
       style={{
-        border: hlActive ? '1px solid transparent' : (visible ? '1px solid rgba(0,0,0,0.1)' : '1px solid transparent'),
+        border: hlActive ? '1px solid transparent' : (visible ? '1px solid var(--color-border)' : '1px solid transparent'),
         borderRadius: hlActive && highlightBorderRadius ? highlightBorderRadius : 12,
         padding: 12,
         marginLeft: -12,
         marginRight: -12,
         background: hlActive
-          ? (highlight === 'black' ? 'var(--color-black)' : highlight === 'white-outlined' ? 'white' : 'var(--color-accent)')
-          : (visible && !borderOnly) ? 'white' : 'transparent',
+          ? (highlight === 'black' ? 'var(--color-black)' : highlight === 'white-outlined' ? 'var(--color-card-bg)' : 'var(--color-accent)')
+          : (visible && !borderOnly) ? 'var(--color-card-bg)' : 'transparent',
         color: hlActive
           ? (highlight === 'black' ? 'white' : 'var(--color-black)')
           : undefined,
-        boxShadow: highlight === 'white-outlined' ? '0 0 0 1px black' : 'none',
-        transition: 'border-color 0.3s ease, background 0.3s ease, box-shadow 0.3s ease, color 0.3s ease, border-radius 0.3s ease',
+        boxShadow: highlight === 'white-outlined' ? '0 0 0 1px var(--color-border)' : 'none',
+        transition: 'border-color 0.3s ease, background 0.3s ease, box-shadow 0.3s ease, color 0.5s ease, border-radius 0.3s ease',
         ...style,
       }}
     >
@@ -146,7 +146,7 @@ function InputCard({ children, isLocked, show, borderOnly, style, onMouseEnter, 
 
 const VB_BTN: React.CSSProperties = {
   width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center',
-  borderRadius: 20, border: 'none', background: 'white', cursor: 'pointer',
+  borderRadius: 20, border: 'none', background: 'var(--color-card-bg)', cursor: 'pointer',
   ...CARD_SHADOW_STYLE,
 };
 
@@ -176,15 +176,24 @@ function VersionBrowser({
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  const navigate = useCallback((dir: -1 | 1) => {
-    const next = Math.max(0, Math.min(versions.length - 1, currentIndex + dir));
-    if (next !== currentIndex) onNavigate(next);
-  }, [versions.length, currentIndex, onNavigate]);
-
   const handleClose = useCallback(() => {
     setClosing(true);
     setTimeout(() => onClose(), 350);
   }, [onClose]);
+
+  // Close on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [handleClose]);
+
+  const navigate = useCallback((dir: -1 | 1) => {
+    const next = Math.max(0, Math.min(versions.length - 1, currentIndex + dir));
+    if (next !== currentIndex) onNavigate(next);
+  }, [versions.length, currentIndex, onNavigate]);
 
   const measureRef = useCallback((idx: number, el: HTMLDivElement | null) => {
     if (!el) return;
@@ -204,8 +213,35 @@ function VersionBrowser({
   const activeCardH = measuredH[currentIndex] ?? anchor.height;
   const controlsTop = Math.max(8, activeCardTop - GAP - CONTROLS_H);
 
+  // Calculate how far the bottommost card extends from the top
+  const scrollH = activeCardTop + activeCardH + GAP;
+  let extraH = 0;
+  for (let s = currentIndex - 1; s >= 0; s -= 1) {
+    extraH += (measuredH[s] ?? anchor.height) + GAP;
+  }
+
+  const vbScrollRef = useRef(0);
+  const [vbScroll, setVbScroll] = useState(0);
+  const vbRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = vbRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      const maxScroll = Math.max(0, scrollH + extraH - (el.clientHeight ?? 0));
+      const next = Math.max(0, Math.min(maxScroll, vbScrollRef.current + e.deltaY));
+      vbScrollRef.current = next;
+      setVbScroll(next);
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [scrollH, extraH]);
+
   return (
     <div
+      ref={vbRef}
       style={{
         position: 'absolute',
         inset: 0,
@@ -213,11 +249,13 @@ function VersionBrowser({
         backdropFilter: 'blur(10px)',
         WebkitBackdropFilter: 'blur(10px)',
         background: 'transparent',
+        overflow: 'hidden',
       }}
       onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
     >
+      <div style={{ transform: `translateY(-${vbScroll}px)` }}>
       {/* Controls */}
-      <div style={{
+      <div className="vb-controls" style={{
         position: 'absolute',
         left: cardLeft, top: controlsTop, width: cardW,
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
@@ -231,13 +269,13 @@ function VersionBrowser({
         </button>
         <div style={{
           display: 'flex', alignItems: 'center',
-          borderRadius: 20, background: 'white', overflow: 'hidden',
+          borderRadius: 20, background: 'var(--color-card-bg)', overflow: 'hidden',
           ...CARD_SHADOW_STYLE,
         }}>
           <button onClick={() => navigate(-1)} style={{ ...VB_BTN, paddingLeft: 16, paddingRight: 12, boxShadow: 'none' }}>
             <img src="/down_thin.svg" alt="Older" width={16} height={16} />
           </button>
-          <div style={{ width: 1, height: 20, background: 'rgba(0,0,0,0.1)' }} />
+          <div style={{ width: 1, height: 20, background: 'var(--color-border)' }} />
           <button onClick={() => navigate(1)} style={{ ...VB_BTN, paddingLeft: 12, paddingRight: 16, boxShadow: 'none' }}>
             <img src="/up_thin.svg" alt="Newer" width={16} height={16} />
           </button>
@@ -288,8 +326,8 @@ function VersionBrowser({
               position: 'absolute',
               left: cardLeft, top: cardTop, width: cardW,
               padding: 12, borderRadius: 12,
-              background: 'white',
-              border: isActive ? '1px solid black' : '0.5px solid rgba(0,0,0,0.08)',
+              background: 'var(--color-card-bg)',
+              border: isActive ? '1px solid var(--color-border)' : '0.5px solid var(--color-border)',
               transform: entered
                 ? `rotate(${rotation}deg) scale(1)`
                 : `rotate(0deg) scale(0.92)`,
@@ -310,6 +348,8 @@ function VersionBrowser({
           </div>
         );
       })}
+      <div style={{ height: scrollH + extraH }} />
+      </div>
     </div>
   );
 }
@@ -325,9 +365,7 @@ interface SceneCardProps {
   isSnapped: boolean;
   onUpdateTitle: (title: string) => void;
   onUpdateDuration: (duration: number) => void;
-  onUpdateDraftContent: (content: string) => void;
-  onSelectDraftVersion: (index: number) => void;
-  onDeleteDraft: (draftIndex: number) => void;
+
   onUpdateNarration: (narration: string) => void;
   onCreateNarrationVersion: () => void;
   onSetNarrationVersion: (index: number) => void;
@@ -336,7 +374,7 @@ interface SceneCardProps {
   onGenerate: () => void;
   onToggleOnScreenText: (textId: string) => void;
   onUpdateOnScreenTextsText: (text: string) => void;
-  onUpdateReferencesText: (text: string) => void;
+
   onAddReference: (ref: { label: string; url: string; note: string }) => void;
   onUpdateReference: (refId: string, updates: { label?: string; url?: string }) => void;
   onDeleteReference: (refId: string) => void;
@@ -356,13 +394,10 @@ export function SceneCard({
   timelinePreviewDelayMs = 0,
   paceWordsPerSec,
   isGeneratingScene,
-  isReadingMode: _isReadingMode,
+  isReadingMode,
   isSnapped,
   onUpdateTitle,
   onUpdateDuration,
-  onUpdateDraftContent: _onUpdateDraftContent,
-  onSelectDraftVersion: _onSelectDraftVersion,
-  onDeleteDraft: _onDeleteDraft,
   onUpdateNarration,
   onCreateNarrationVersion,
   onSetNarrationVersion,
@@ -371,22 +406,21 @@ export function SceneCard({
   onGenerate,
   onToggleOnScreenText,
   onUpdateOnScreenTextsText,
-  onUpdateReferencesText: _onUpdateReferencesText,
   onAddReference,
   onUpdateReference,
-  onDeleteReference: _onDeleteReference,
+  onDeleteReference,
   onDeleteScene,
   registerRef,
   reportDragTransform,
-  totalScenes: _totalScenes = 1,
+  totalScenes = 1,
   isRevealing,
   externalHovered,
   isDeleting,
 }: SceneCardProps) {
   const [isHovered, setIsHovered] = useState(false);
-  const { versionBrowsingSceneId, setVersionBrowsingSceneId, addToast } = useUIStore();
-  const isVersionModal = versionBrowsingSceneId === scene.id;
-  const otherVersionBrowsing = !!versionBrowsingSceneId && versionBrowsingSceneId !== scene.id;
+  const { versionBrowsingSceneIds, addVersionBrowsingSceneId, removeVersionBrowsingSceneId, addToast } = useUIStore();
+  const isVersionModal = versionBrowsingSceneIds.includes(scene.id);
+  const otherVersionBrowsing = versionBrowsingSceneIds.length > 0 && !versionBrowsingSceneIds.includes(scene.id);
   const effectiveHovered = otherVersionBrowsing ? false : (isHovered || !!externalHovered || isVersionModal);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -397,14 +431,7 @@ export function SceneCard({
   const titleCardRef = useRef<HTMLDivElement>(null);
   const durationCardRef = useRef<HTMLDivElement>(null);
 
-  // Delete animation: phase 1 = fade out, phase 2 = collapse width
-  const [deletePhase, setDeletePhase] = useState(0);
-  useEffect(() => {
-    if (isDeleting && deletePhase === 0) {
-      requestAnimationFrame(() => setDeletePhase(1));
-      setTimeout(() => setDeletePhase(2), 350);
-    }
-  }, [isDeleting, deletePhase]);
+  // Delete animation handled by CSS keyframes (reverse of insert reveal)
 
   // Entrance animation guard: after initial mount animation, set animation: none
   // to prevent CSS re-trigger when React reorders DOM nodes during drag-drop
@@ -432,12 +459,14 @@ export function SceneCard({
   const onScreenCommitRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const onScreenBlurRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const isEditingOnScreen = useRef(false);
-  let nextLocalKeyRef = useRef(0);
+  const nextLocalKeyRef = useRef(0);
   // Per-reference inline editing: null = not editing, 'new' = adding, or ref id
   const [editingRefId, setEditingRefId] = useState<string | null>(null);
   const [refDialogClosing, setRefDialogClosing] = useState(false);
   const [editingRefLabel, setEditingRefLabel] = useState('');
   const [editingRefUrl, setEditingRefUrl] = useState('');
+  const [portalCx, setPortalCx] = useState(0);
+  const [portalCy, setPortalCy] = useState(0);
   const durationTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const titleTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const titleWarnedAtRef = useRef(0);
@@ -468,29 +497,26 @@ export function SceneCard({
   );
 
   // ── Drag physics: velocity-based inertia ──
-  // Track smoothed velocity via exponential moving average (EMA).
-  // Raw per-frame delta is tiny (~8px at 500px/s), so EMA accumulates
-  // momentum and the higher factor (0.5) makes the rotation clearly visible.
   const prevDragX = useRef<number | null>(null);
   const smoothedVelocity = useRef(0);
+  const [dragRotation, setDragRotation] = useState(0);
 
-  if (isDragging && transform) {
-    if (prevDragX.current !== null) {
-      const rawVelocity = transform.x - prevDragX.current;
-      smoothedVelocity.current = smoothedVelocity.current * 0.65 + rawVelocity * 0.35;
+  useEffect(() => {
+    if (isDragging && transform) {
+      if (prevDragX.current !== null) {
+        const rawVelocity = transform.x - prevDragX.current;
+        smoothedVelocity.current = smoothedVelocity.current * 0.65 + rawVelocity * 0.35;
+      }
+      prevDragX.current = transform.x;
+      reportDragTransform?.(scene.id, transform.x, transform.y);
+      const rotation = Math.max(-6, Math.min(6, smoothedVelocity.current * 0.5));
+      setDragRotation(rotation);
+    } else {
+      prevDragX.current = null;
+      smoothedVelocity.current = 0;
+      setDragRotation(0);
     }
-    prevDragX.current = transform.x;
-    reportDragTransform?.(scene.id, transform.x, transform.y);
-  } else {
-    prevDragX.current = null;
-    smoothedVelocity.current = 0;
-  }
-
-  // Pivot is top-right (drag handle). Positive velocity (drag right) →
-  // positive rotation (clockwise around top-right) → bottom lags LEFT.
-  const dragRotation = isDragging
-    ? Math.max(-6, Math.min(6, smoothedVelocity.current * 0.5))
-    : 0;
+  }, [isDragging, transform]);
 
   // Spring easing for displaced columns
   const springTransition = !isDragging && transition
@@ -518,6 +544,63 @@ export function SceneCard({
   const versionBrowsing = isVersionModal;
   const [narrationFocused, setNarrationFocused] = useState(false);
   const [narrationHovered, setNarrationHovered] = useState(false);
+  const [dotOpacity, setDotOpacity] = useState(0);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const DOT_SIZE = 2.5, DOT_GAP = 3, DOT_ROWS = 20;
+  const DOT_CELL = DOT_SIZE + DOT_GAP;
+  const ZONE_TOP = -100, ZONE_BOT = 150, ZONE_CY = 25, ZONE_RY = 125;
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const container = contentRef.current;
+    if (!canvas || !container) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const draw = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = container.getBoundingClientRect();
+      const width = rect.width;
+      const height = DOT_ROWS * DOT_CELL - DOT_GAP;
+
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      ctx.fillStyle = getComputedStyle(canvas).color;
+
+      const cols = Math.floor((width + DOT_GAP) / DOT_CELL);
+      const center = Math.floor(cols / 2);
+      const gridW = cols * DOT_CELL - DOT_GAP;
+      const offX = (width - gridW) / 2 + DOT_SIZE / 2;
+      const offY = DOT_SIZE / 2;
+
+      for (let row = 0; row < DOT_ROWS; row++) {
+        for (let col = 0; col < cols; col++) {
+          const v = 0.9 * Math.pow(1 - row / (DOT_ROWS - 1), 5);
+          const h = 1 - 0.48 * Math.abs(col - center) / center;
+          const opacity = Math.max(0, v * h);
+          if (opacity < 0.005) continue;
+          ctx.globalAlpha = opacity;
+          ctx.beginPath();
+          ctx.arc(offX + col * DOT_CELL, offY + row * DOT_CELL, DOT_SIZE / 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
+    };
+
+    draw();
+    const ro = new ResizeObserver(draw);
+    ro.observe(container);
+    const mo = new MutationObserver(draw);
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => { ro.disconnect(); mo.disconnect(); };
+  }, []);
 
 
   const [versionAnchor, setVersionAnchor] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
@@ -538,13 +621,13 @@ export function SceneCard({
       } else {
         setVersionAnchor(null);
       }
-      setVersionBrowsingSceneId(scene.id);
+      addVersionBrowsingSceneId(scene.id);
     });
-  }, [scene.id, setVersionBrowsingSceneId]);
+  }, [scene.id, addVersionBrowsingSceneId]);
   const exitVersionBrowsing = useCallback(() => {
     setVersionAnchor(null);
-    setVersionBrowsingSceneId(null);
-  }, [setVersionBrowsingSceneId]);
+    removeVersionBrowsingSceneId(scene.id);
+  }, [scene.id, removeVersionBrowsingSceneId]);
 
   // Sync local state
   useEffect(() => {
@@ -554,6 +637,13 @@ export function SceneCard({
   useEffect(() => {
     setLocalTitle(scene.title);
   }, [scene.title]);
+
+  useLayoutEffect(() => {
+    if (!editingRefId) return;
+    const rect = columnRef.current?.getBoundingClientRect();
+    setPortalCx(rect ? rect.left + rect.width / 2 : 0);
+    setPortalCy(rect ? rect.top + rect.height / 2 : 0);
+  }, [editingRefId]);
 
   // Word-by-word reveal after generation completes
   const wasGenerating = useRef(false);
@@ -887,12 +977,15 @@ export function SceneCard({
   useEffect(() => () => clearTimeout(snappedPhaseTimerRef.current), []);
 
   // Determine the CSS animation for this column's root element.
+  // - Deleting: collapse width (plays after overlay reveal)
   // - Revealing: expand from 0 width
   // - hasEntered (normal): force 'none' to prevent CSS re-triggers during DOM reorder
   // - Initial entrance / about-screen: handled by CSS rule or aboutStyle
-  const columnAnimation = isRevealing
-    ? 'insert-col-expand 0.4s cubic-bezier(0.4, 0, 0.2, 1) both'
-    : (hasEntered && !aboutExiting && !aboutEntering) ? 'none' : undefined;
+  const columnAnimation = isDeleting
+    ? 'delete-col-collapse 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.55s both'
+    : isRevealing
+      ? 'insert-col-expand 0.4s cubic-bezier(0.4, 0, 0.2, 1) both'
+      : (hasEntered && !aboutExiting && !aboutEntering) ? 'none' : undefined;
 
   // Build about-animation style overrides (speed-adjusted)
   const aboutStyle: React.CSSProperties = {};
@@ -985,8 +1078,8 @@ export function SceneCard({
   // Use smooth cubic-bezier for insert (0→324), delete (324→0), and about-screen.
   // In reading mode: instant width swap (no flex reflow animation = no border pulsation).
   const useStepsForWidth =
-    !isRevealing && !isDeleting && deletePhase < 1 && (timelinePreview || showTimelineLayout);
-  const suppressWidthAnim = _isReadingMode && !isRevealing && !isDeleting;
+    !isRevealing && !isDeleting && (timelinePreview || showTimelineLayout);
+  const suppressWidthAnim = isReadingMode && !isRevealing && !isDeleting;
   const widthTransition = suppressWidthAnim
     ? 'width 0s'
     : useStepsForWidth
@@ -1011,11 +1104,11 @@ export function SceneCard({
           ...style,
           rotate: `${dragRotation}deg`,
           transformOrigin: 'top right',
-          width: deletePhase === 2 ? 0 : (isRevealing ? 0 : effectiveColumnWidth),
-          flexBasis: deletePhase === 2 ? 0 : (isRevealing ? 0 : effectiveColumnWidth),
-          maxWidth: deletePhase === 2 ? 0 : (isRevealing ? 0 : effectiveColumnWidth),
+          width: isRevealing ? 0 : effectiveColumnWidth,
+          flexBasis: isRevealing ? 0 : effectiveColumnWidth,
+          maxWidth: isRevealing ? 0 : effectiveColumnWidth,
           minWidth: isRevealing || isDeleting || forceMinWidthZero ? 0 : undefined,
-          opacity: deletePhase >= 1 ? 0 : 1,
+          opacity: 1,
           borderRight: colBorderRight,
           transition: [
             'rotate 0.15s ease-out',
@@ -1048,7 +1141,7 @@ export function SceneCard({
           />
         )}
         {/* Right border only for the last column */}
-        {showColBorder && index === _totalScenes - 1 && (
+        {showColBorder && index === totalScenes - 1 && (
           <div
             style={{
               position: 'absolute', top: 0, right: 0, bottom: 0, width: 1,
@@ -1115,7 +1208,7 @@ export function SceneCard({
                 borderRadius: 10,
                 padding: '7px 12px',
                 lineHeight: 1,
-                background: 'white',
+                background: 'var(--color-card-bg)',
                   position: 'relative',
                   zIndex: 4,
               }}
@@ -1151,7 +1244,7 @@ export function SceneCard({
                 fontSize: '26px',
                 fontWeight: 400,
                 lineHeight: 1.05,
-                color: '#111111',
+              color: 'var(--color-dot)',
                 letterSpacing: '0.01em',
                 textAlign: 'right',
                 transform: 'rotate(-90deg)',
@@ -1214,6 +1307,16 @@ export function SceneCard({
             }}
           />
         )}
+        {isDeleting && (
+          <div
+            style={{
+              position: 'absolute', inset: 0, zIndex: 50,
+              background: '#E53935',
+              transformOrigin: 'right',
+              animation: 'delete-col-reveal 0.55s cubic-bezier(0.4, 0, 0.2, 1) forwards',
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -1225,11 +1328,11 @@ export function SceneCard({
         ...style,
         rotate: `${dragRotation}deg`,
         transformOrigin: 'top right',
-        width: deletePhase === 2 ? 0 : (isRevealing ? 0 : (timelinePreview ? COL_W_TIMELINE : columnWidth)),
-        flexBasis: deletePhase === 2 ? 0 : (isRevealing ? 0 : (timelinePreview ? COL_W_TIMELINE : columnWidth)),
-        maxWidth: deletePhase === 2 ? 0 : (isRevealing ? 0 : (timelinePreview ? COL_W_TIMELINE : columnWidth)),
+        width: isRevealing ? 0 : (timelinePreview ? COL_W_TIMELINE : columnWidth),
+        flexBasis: isRevealing ? 0 : (timelinePreview ? COL_W_TIMELINE : columnWidth),
+        maxWidth: isRevealing ? 0 : (timelinePreview ? COL_W_TIMELINE : columnWidth),
         minWidth: isRevealing || isDeleting || forceMinWidthZero ? 0 : undefined,
-        opacity: deletePhase >= 1 ? 0 : 1,
+        opacity: 1,
         borderRight: colBorderRight,
         transition: [
           springTransition,
@@ -1275,7 +1378,7 @@ export function SceneCard({
         />
       )}
       {/* Right border only for the last column */}
-      {showColBorder && index === _totalScenes - 1 && (
+      {showColBorder && index === totalScenes - 1 && (
         <div
           style={{
             position: 'absolute', top: 0, right: 0, bottom: 0, width: 1,
@@ -1292,14 +1395,50 @@ export function SceneCard({
         style={{
           width: columnWidth,
           height: '100%',
-          transition: _isReadingMode
+          transition: isReadingMode
             ? 'opacity 0.15s ease'
             : 'opacity 0.15s ease, width 0.56s cubic-bezier(0.22, 1, 0.36, 1)',
           opacity: editingRefId ? 0.2 : 1,
           pointerEvents: (editingRefId || timelinePreview) ? 'none' : 'auto',
           position: 'relative',
         }}
+        onMouseMove={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          const relX = e.clientX - rect.left;
+          const relY = e.clientY - rect.top;
+          if (relY > ZONE_TOP && relY < ZONE_BOT) {
+            const dx = (relX - rect.width / 2) / (rect.width / 2);
+            const dy = (relY - ZONE_CY) / ZONE_RY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            setDotOpacity(Math.max(0, Math.min(1, 1 - dist)));
+          } else {
+            setDotOpacity(0);
+          }
+        }}
+        onMouseLeave={() => setDotOpacity(0)}
       >
+        {/* ── Drag handle — dots fill card, top→bottom fade →0%, center→edges dim ── */}
+        <div
+          {...attributes}
+          {...listeners}
+          className="scene-drag-handle"
+          style={{ position: 'absolute', top: 0, left: 0, right: 0 }}
+        >
+          <canvas
+            ref={canvasRef}
+            style={{
+              position: 'absolute',
+              top: 2,
+              left: 0,
+              right: 0,
+              color: 'var(--color-dot)',
+              opacity: dotOpacity,
+              transition: 'opacity 0.5s ease',
+              pointerEvents: 'none',
+            }}
+          />
+        </div>
+
         {/* ── Row 1: Scene Number + Icons ── */}
         <div className="flex items-center justify-between mt-[60px] h-[50px] min-h-[50px]">
           {/* Number with clip-frame slide animation */}
@@ -1307,6 +1446,7 @@ export function SceneCard({
             style={{
               height: 50, overflow: 'hidden', position: 'relative',
               fontFamily: 'var(--font-headline)', fontSize: 50, lineHeight: 1,
+              userSelect: 'none', cursor: 'default',
               transform: isTransitioningToTimeline ? `translateX(${numberCenterOffset}px)` : 'translateX(0)',
               transition: isTransitioningToTimeline
                 ? `transform 0.56s cubic-bezier(0.22, 1, 0.36, 1) ${widthDelay}`
@@ -1345,7 +1485,7 @@ export function SceneCard({
               >
             <button
                   onClick={onDeleteScene}
-                  className="p-0.5 text-[var(--color-black)] hover:text-red-500 transition-colors"
+                  className="p-0.5 text-[var(--color-card-text)] hover:text-red-500 transition-colors"
                   title="Delete scene"
                 >
                   <DeleteIcon size={24} />
@@ -1355,7 +1495,7 @@ export function SceneCard({
                   onClick={onGenerate}
                   disabled={isGeneratingScene}
                   className={`p-0.5 transition-colors ${
-                    isGeneratingScene ? 'text-[var(--color-accent)]' : 'text-[var(--color-black)] hover:text-[var(--color-accent)]'
+                    isGeneratingScene ? 'text-[var(--color-accent)]' : 'text-[var(--color-card-text)] hover:text-[var(--color-accent)]'
                   }`}
                   title="Generate narration for this scene"
                 >
@@ -1366,13 +1506,6 @@ export function SceneCard({
                   )}
                 </button>
 
-            <button
-              {...attributes}
-              {...listeners}
-                  className="p-0.5 text-[var(--color-black)] hover:text-[var(--color-accent)] cursor-grab active:cursor-grabbing transition-colors"
-                >
-                  <DragIcon size={24} isPressed={isDragging} />
-                </button>
               </div>
             )}
 
@@ -1382,7 +1515,7 @@ export function SceneCard({
               className={`p-0.5 transition-colors ${
                 isLocked
                   ? 'text-[var(--color-accent)] hover:text-white'
-                  : 'text-[var(--color-black)] hover:text-[var(--color-accent)]'
+                  : 'text-[var(--color-card-text)] hover:text-[var(--color-accent)]'
               }`}
               style={{
                 opacity: isLocked ? 1 : (effectiveHovered ? 1 : 0),
@@ -1399,7 +1532,7 @@ export function SceneCard({
         {/* ── Row 2: Duration + Scale ── */}
         <div
           ref={durationRowRef}
-          className="mt-[54px] flex items-center gap-[12px]"
+          className="duration-row mt-[54px] flex items-center gap-[12px]"
           style={{
             opacity: isTransitioningToTimeline ? 0 : 1,
             transform: isTransitioningToTimeline ? 'translateY(10px)' : 'translateY(0)',
@@ -1413,10 +1546,10 @@ export function SceneCard({
             onChange={e => handleDurationChange(e.target.value)}
             disabled={isLocked}
             min={1}
-              className="subheading"
+              className="subheading scene-duration-input"
               style={{
                 width: 36,
-                ...(isLocked ? {} : { color: 'var(--color-black)' }),
+                ...(isLocked ? { color: 'var(--color-card-text)' } : {}),
                 ...(durationBounce ? { animation: 'duration-bounce 0.3s ease' } : {}),
               }}
             />
@@ -1424,7 +1557,7 @@ export function SceneCard({
           {speakingTimeSec > 0 && (
             <span
               className="subheading"
-              style={{ color: isLocked ? 'rgba(200,200,200,0.3)' : 'rgb(175, 175, 175)' }}
+              style={{ color: 'var(--color-card-text)', opacity: isLocked ? 0.3 : 0.5 }}
             >
               {speakingTimeSec}
             </span>
@@ -1478,7 +1611,7 @@ export function SceneCard({
         {/* ── Narration — hide when locked & empty ── */}
         {(!isLocked || hasNarration) && (() => {
           const showCard = !isLocked && (narrationFocused || narrationHovered || versionBrowsing);
-          const showStack = hasMultipleVersions && !versionBrowsing;
+          const showStack = hasMultipleVersions && !versionBrowsing && !isLocked;
           return (
             <div
               className="narration-wrap mt-[16px]"
@@ -1495,8 +1628,8 @@ export function SceneCard({
                   <div style={{
                     position: 'absolute',
                     left: 0, right: 0, top: 10, bottom: -10,
-                    background: 'white',
-                    border: '1px solid rgba(0,0,0,0.1)',
+                    background: 'var(--color-card-bg)',
+                    border: '1px solid var(--color-border)',
                     borderRadius: 12, zIndex: -1,
                     opacity: narrationHovered ? 1 : 0,
                     transition: 'opacity 0.2s ease',
@@ -1506,13 +1639,13 @@ export function SceneCard({
                     <div style={{
                       position: 'absolute',
                       left: 12, right: 12, top: 20, bottom: -20,
-                      background: 'white',
-                      border: '1px solid rgba(0,0,0,0.1)',
+                      background: 'var(--color-card-bg)',
+                      border: '1px solid var(--color-border)',
                       borderRadius: 12, zIndex: -2,
                       opacity: narrationHovered ? 1 : 0,
                       transition: 'opacity 0.2s ease',
-                      pointerEvents: 'none',
-                    }} />
+                      pointerEvents: 'none' }}
+                    />
                   )}
                 </>
               )}
@@ -1594,16 +1727,16 @@ export function SceneCard({
                         ref={(el: HTMLTextAreaElement | null) => { onScreenInputRefs.current[idx] = el; }}
                         value={localItem.text}
                         onChange={e => {
-                          if (!isLocked) {
+                          if (!isLocked && !isChecked) {
                             handleOnScreenItemChange(idx, e.target.value);
                             autoResize(e.target);
                           }
                         }}
-                        onKeyDown={e => { if (!isLocked) handleOnScreenKeyDown(e, idx); }}
-                        onFocus={() => { if (!isLocked) handleOnScreenFocus(); }}
-                        onBlur={() => { if (!isLocked) handleOnScreenBlur(); }}
+                        onKeyDown={e => { if (!isLocked && !isChecked) handleOnScreenKeyDown(e, idx); }}
+                        onFocus={() => { if (!isLocked && !isChecked) handleOnScreenFocus(); }}
+                        onBlur={() => { if (!isLocked && !isChecked) handleOnScreenBlur(); }}
                         disabled={isLocked}
-                        readOnly={isLocked}
+                        readOnly={isLocked || isChecked}
                         className={`onscreen-input flex-1 min-w-0 main-text auto-height-textarea ${isChecked ? 'onscreen-item is-checked' : ''}`}
                         rows={1}
                       />
@@ -1652,7 +1785,12 @@ export function SceneCard({
                         className="reference-pill-link"
                         onClick={(e) => {
                           e.stopPropagation();
-                          window.open(ref.url, '_blank', 'noopener,noreferrer');
+                          e.preventDefault();
+                          let url = ref.url;
+                          if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
+                            url = 'https://' + url;
+                          }
+                          window.open(url, '_blank', 'noopener,noreferrer');
                         }}
                       >
                         <img src="/external_link.svg" alt="" width={16} height={16} />
@@ -1699,9 +1837,6 @@ export function SceneCard({
 
       {/* Reference Edit/Add Dialog — portal, centered on this column */}
       {editingRefId && (() => {
-        const rect = columnRef.current?.getBoundingClientRect();
-        const cx = rect ? rect.left + rect.width / 2 : 0;
-        const cy = rect ? rect.top + rect.height / 2 : 0;
         const isDisabled = !editingRefLabel.trim() && !editingRefUrl.trim();
         const isEditing = editingRefId !== 'new';
         return createPortal(
@@ -1709,13 +1844,14 @@ export function SceneCard({
             ref={refDialogRef}
             style={{
               position: 'fixed',
-              left: cx, top: cy,
+              left: portalCx, top: portalCy,
               transform: 'translate(-50%, -50%)',
               zIndex: 50,
               width: COL_W + 32,
               borderRadius: 16,
-              border: '0.5px solid #E6E6E6',
-              background: 'white',
+              border: '0.5px solid var(--color-border)',
+              background: 'var(--color-card-bg)',
+              color: 'var(--color-card-text)',
               padding: 16,
               display: 'flex',
               flexDirection: 'column',
@@ -1741,9 +1877,9 @@ export function SceneCard({
               placeholder="Title"
               autoFocus
               style={{
-                height: 40, borderRadius: 8, border: '0.5px solid #E6E6E6',
+                height: 40, borderRadius: 8, border: '0.5px solid var(--color-border)',
                 paddingLeft: 10, fontSize: 13, outline: 'none', flexShrink: 0,
-                margin: 0, background: 'transparent',
+                margin: 0, background: 'transparent', color: 'var(--color-card-text)',
               }}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); saveRefEdit(); } if (e.key === 'Escape') closeRefDialogAnimated(); }}
             />
@@ -1754,9 +1890,9 @@ export function SceneCard({
               onChange={e => setEditingRefUrl(e.target.value)}
               placeholder="Link"
               style={{
-                height: 40, borderRadius: 8, border: '0.5px solid #E6E6E6',
+                height: 40, borderRadius: 8, border: '0.5px solid var(--color-border)',
                 paddingLeft: 10, fontSize: 13, outline: 'none', flexShrink: 0,
-                margin: 0, background: 'transparent',
+                margin: 0, background: 'transparent', color: 'var(--color-card-text)',
               }}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); saveRefEdit(); } if (e.key === 'Escape') closeRefDialogAnimated(); }}
             />
@@ -1766,18 +1902,18 @@ export function SceneCard({
                 onClick={closeRefDialogAnimated}
                 style={{
                   flex: 1, height: 40, borderRadius: 8,
-                  border: '0.5px solid #E6E6E6', background: 'transparent',
-                  cursor: 'pointer', fontSize: 13, fontWeight: 500, color: '#7C7C7C',
+                  border: '0.5px solid var(--color-border)', background: 'transparent',
+                  cursor: 'pointer', fontSize: 13, fontWeight: 500, color: 'var(--color-card-text)',
                 }}
               >
                 Cancel
               </button>
               {isEditing && (
                 <button
-                  onClick={() => { _onDeleteReference(editingRefId); closeRefDialogAnimated(); }}
+                  onClick={() => { onDeleteReference(editingRefId); closeRefDialogAnimated(); }}
                   style={{
                     flex: 1, height: 40, borderRadius: 8,
-                    border: '0.5px solid #E6E6E6', background: 'transparent',
+                    border: '0.5px solid var(--color-border)', background: 'transparent',
                     cursor: 'pointer', fontSize: 13, fontWeight: 500, color: '#E53935',
                   }}
                 >
@@ -1789,8 +1925,8 @@ export function SceneCard({
                 disabled={isDisabled}
                 style={{
                   flex: 1, height: 40, borderRadius: 8,
-                  background: isDisabled ? '#E6E6E6' : 'var(--color-accent)',
-                  color: 'white',
+                  background: isDisabled ? 'var(--color-border)' : 'var(--color-accent)',
+                  color: isDisabled ? 'var(--color-card-text)' : 'white',
                   border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500,
                 }}
               >
@@ -1810,6 +1946,16 @@ export function SceneCard({
             background: 'var(--color-accent)',
             transformOrigin: 'right',
             animation: 'insert-col-reveal 0.55s cubic-bezier(0.4, 0, 0.2, 1) 0.42s forwards',
+          }}
+        />
+      )}
+      {isDeleting && (
+        <div
+          style={{
+            position: 'absolute', inset: 0, zIndex: 50,
+            background: '#E53935',
+            transformOrigin: 'right',
+            animation: 'delete-col-reveal 0.55s cubic-bezier(0.4, 0, 0.2, 1) forwards',
           }}
         />
       )}
